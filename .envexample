@@ -1,0 +1,7 @@
+# postgres
+DBSERVER=79.174.xx.xx
+DBSERVERPORT=xxx
+DBNAME=str
+DBUSER=str
+DBUSERPASSWORD=str
+

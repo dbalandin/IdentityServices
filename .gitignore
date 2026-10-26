@@ -1,0 +1,9 @@
+bin/
+obj/
+.vs/
+.idea/
+*.user
+.env
+.env.local
+parity/.work/
+scripts/temp/
