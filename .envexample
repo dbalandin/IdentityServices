@@ -1,7 +1,54 @@
-# postgres
+# ============================================================
+# IdentityServices — переменные окружения
+# Скопировать в `.env` (в корне репо) и заполнить реальными значениями.
+# `.env` в .gitignore — РЕАЛЬНЫХ СЕКРЕТОВ В РЕПО БЫТЬ НЕ ДОЛЖНО.
+# Все значения ниже — заглушки.
+# ============================================================
+
+# --- PostgreSQL (внешний сервер БД; compose БД не поднимает) ---
 DBSERVER=79.174.xx.xx
 DBSERVERPORT=xxx
 DBNAME=str
 DBUSER=str
 DBUSERPASSWORD=str
 
+# --- Keycloak: подключение к БД (значения брать из DBSERVER* выше;
+#     KC_DB_URL_DATABASE — имя БД keycloak на этом сервере) ---
+KC_DB=postgres
+KC_DB_URL_HOST=79.174.xx.xx
+KC_DB_URL_PORT=5432
+KC_DB_URL_DATABASE=keycloak
+KC_DB_USERNAME=keycloak
+KC_DB_PASSWORD=change-me-db-password
+
+# --- Keycloak: начальный (bootstrap) админ realm master ---
+KC_BOOTSTRAP_ADMIN_USERNAME=admin
+KC_BOOTSTRAP_ADMIN_PASSWORD=change-me-admin-password
+
+# --- Хостнейм Keycloak (публикация только на 127.0.0.1:10020) ---
+KC_HOSTNAME=127.0.0.1
+# Порт хоста в issuer (контракт JWT: iss = http://127.0.0.1:10020/realms/rulink)
+KC_HOSTNAME_PORT=10020
+
+# --- SMTP: сброс пароля (forgot password) в realm rulink ---
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_USER=
+SMTP_PASSWORD=
+SMTP_FROM=no-reply@rulink.example
+# STARTTLS для SMTP (true/false, по умолчанию false)
+SMTP_STARTTLS=false
+
+# --- Клиенты realm rulink (создаются init-скриптом, task-02) ---
+# portal (confidential, сервис-аккаунт для Admin REST) — секрет обязателен
+PORTAL_CLIENT_SECRET=change-me-portal-client-secret
+# demo-api — public-клиент, секрет в OIDC-потоках не используется
+# (переменная зарезервирована для сервис-сервис сценариев)
+DEMO_CLIENT_SECRET=change-me-demo-client-secret
+# разрешённые redirect-URI / web-origins портала (P4, dev-значения)
+PORTAL_REDIRECT_URIS=http://127.0.0.1:10030/*
+PORTAL_WEB_ORIGINS=http://127.0.0.1:10030
+
+# --- Демо-пароль seeded-пользователей realm rulink (init-скрипт, task-02).
+#     НЕ прод-пароль; password policy realm — минимум 8 символов. ---
+INIT_DEMO_PASSWORD=change-me-demo-password

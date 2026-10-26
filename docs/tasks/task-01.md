@@ -1,6 +1,6 @@
 # Task 01: deploy/ — docker-compose для Keycloak + PostgreSQL
 
-- **Статус:** open
+- **Статус:** in progress (артефакты готовы и проверены статически; живой прогон docker — на стороне владельца, см. «Проверка» ниже)
 - **Фаза:** PRD P1
 - **Зависимости:** task-00 (перенос плана)
 - **Источник:** план §4 (архитектура), §5.1, §6 (безопасность)
@@ -31,11 +31,21 @@
 
 ## Критерии готовности
 
-- [ ] `docker compose up -d` из `deploy/` поднимает keycloak, healthcheck становится healthy
-- [ ] Keycloak доступен на `http://127.0.0.1:10020`, админ-вход по `KC_BOOTSTRAP_ADMIN_*`
-- [ ] Тег Keycloak зафиксирован (не `latest`), версия ≥26.1
-- [ ] `.envexample` покрывает все переменные compose/init, реальных секретов в репо нет
-- [ ] Запись в `docs/CHANGELOG.md`
+- [ ] `docker compose up -d` из `deploy/` поднимает keycloak, healthcheck становится healthy — **живой прогон владельца** (у агента нет доступа к docker-сокету)
+- [ ] Keycloak доступен на `http://127.0.0.1:10020`, админ-вход по `KC_BOOTSTRAP_ADMIN_*` — живой прогон
+- [x] Тег Keycloak зафиксирован (не `latest`), версия ≥26.1 — `quay.io/keycloak/keycloak:26.7.5`
+- [x] `.envexample` покрывает все переменные compose/init, реальных секретов в репо нет — кросс-чек переменных скриптом + grep по репо
+- [x] Запись в `docs/CHANGELOG.md`
+
+## Проверка (живой прогон)
+
+```bash
+cd deploy
+cp ../.envexample ../.env   # заполнить реальными значениями (внешняя PG и пр.)
+docker compose --env-file ../.env up -d
+docker ps   # identityservices-keycloak: (healthy)
+# админ-консоль: http://127.0.0.1:10020  (KC_BOOTSTRAP_ADMIN_* из .env)
+```
 
 ## Ссылки
 

@@ -1,0 +1,75 @@
+# Keycloak 26.x + ВНЕШНИЙ PostgreSQL (БД не поднимается compose — адрес/доступы в .env)
+# Запуск (из каталога deploy/):
+#   cp .envexample ../.env   # заполнить значения (один раз)
+#   docker compose --env-file ../.env up -d
+# Админ-консоль: http://127.0.0.1:10020 (вход — KC_BOOTSTRAP_ADMIN_* из .env)
+# Инициализация realm rulink (task-02): ./init-realm.sh ; сверка JWT: ./verify.sh
+#
+# Правила (AGENTS.md): в compose только ${VAR}-подстановки, секретов в репо нет;
+# volume — только именованные/bind mount.
+
+name: identityservices
+
+services:
+  keycloak:
+    # Тег зафиксирован (план §8: конкретный 26.x, >=26.1 — GA Organizations и их атрибутов).
+    # 26.7.5 — зрелый патч линии 26.7; повышать версию — отдельным решением (см. docs/CHANGELOG.md).
+    image: quay.io/keycloak/keycloak:26.7.5
+    container_name: identityservices-keycloak
+    # start (не start-dev): окружение dev/test, но конфигурация близка к прод-режиму
+    # (режим согласован по task-01; http включен осознанно — публикация только на 127.0.0.1).
+    command: start
+    ports:
+      # только localhost; публикация в Интернет — отдельная фаза (nginx reverse-proxy)
+      - "127.0.0.1:10020:8080"
+    environment:
+      # --- bootstrap-админ (master)
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KC_BOOTSTRAP_ADMIN_USERNAME}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_BOOTSTRAP_ADMIN_PASSWORD}
+      # --- внешняя PostgreSQL-БД (значения KC_DB_* в .env берутся из DBSERVER*)
+      KC_DB: ${KC_DB}
+      KC_DB_URL_HOST: ${KC_DB_URL_HOST}
+      KC_DB_URL_PORT: ${KC_DB_URL_PORT}
+      KC_DB_URL_DATABASE: ${KC_DB_URL_DATABASE}
+      KC_DB_USERNAME: ${KC_DB_USERNAME}
+      KC_DB_PASSWORD: ${KC_DB_PASSWORD}
+      # --- http/hostname (dev/test: TLS нет, доступ только через 127.0.0.1:10020)
+      KC_HTTP_ENABLED: "true"
+      KC_HOSTNAME: ${KC_HOSTNAME:-127.0.0.1}
+      # порт в issuer: контракт JWT (docs/contracts/jwt-claims.md) требует
+      # iss = http://127.0.0.1:10020/realms/rulink; без KC_HOSTNAME_PORT
+      # Keycloak взял бы дефолтный 8080 (порт контейнера), а не хост-порт 10020
+      KC_HOSTNAME_PORT: ${KC_HOSTNAME_PORT:-10020}
+      # --- health/metrics на management-интерфейсе (порт 9000, внутри контейнера)
+      KC_HEALTH_ENABLED: "true"
+      # --- переменные для init-скрипта realm (deploy/init/realm-bootstrap.sh, task-02);
+      #     сам сервер Keycloak их не использует
+      INIT_DEMO_PASSWORD: ${INIT_DEMO_PASSWORD}
+      PORTAL_CLIENT_SECRET: ${PORTAL_CLIENT_SECRET}
+      DEMO_CLIENT_SECRET: ${DEMO_CLIENT_SECRET}
+      PORTAL_REDIRECT_URIS: ${PORTAL_REDIRECT_URIS:-http://127.0.0.1:10030/*}
+      PORTAL_WEB_ORIGINS: ${PORTAL_WEB_ORIGINS:-http://127.0.0.1:10030}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      SMTP_STARTTLS: ${SMTP_STARTTLS:-false}
+    volumes:
+      - keycloak-data:/opt/keycloak/data
+      - ./init:/keycloak-init:ro # идемпотентный bootstrap realm rulink (task-02)
+    healthcheck:
+      # /health/ready на management-порту 9000 (curl в образе отсутствует — /dev/tcp + grep)
+      test:
+        - CMD
+        - bash
+        - -c
+        - 'exec 3<>/dev/tcp/127.0.0.1/9000; printf "GET /health/ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n" >&3; grep -qE "\"status\": ?\"UP\"" <&3'
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 90s
+    restart: unless-stopped
+
+volumes:
+  keycloak-data:
