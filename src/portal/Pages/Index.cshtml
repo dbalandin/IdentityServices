@@ -1,0 +1,45 @@
+@page
+@model Portal.Pages.IndexModel
+@{
+    ViewData["Title"] = "Обзор";
+}
+
+<h1>Портал администратора</h1>
+
+<div class="card">
+    <p><b>Администратор:</b> @Model.Email</p>
+    <p><b>Организация:</b> @(Model.Organization ?? "— (суперадмин)")</p>
+    <p><b>Роли:</b> @string.Join(", ", Model.Roles)</p>
+    <p><b>Группы:</b> @(Model.Groups.Count > 0 ? string.Join(", ", Model.Groups) : "—")</p>
+</div>
+
+<div class="card">
+    <h2 style="margin-top:0">Что доступно</h2>
+    @if (Model.IsSuperAdmin)
+    {
+        <p>Вы суперадмин: <a asp-page="/Organizations">организации и их availableServices</a>.
+           Суперадмин не управляет пользователями — только админ своей организации.</p>
+    }
+    else if (Model.IsOrgAdmin)
+    {
+        <ul>
+            <li><a asp-page="/Users">Пользователи</a> — список и создание (email, роль, группы, сервисы, временный пароль)</li>
+            <li><a asp-page="/Groups">Группы</a> — список и создание (префикс организации добавляется автоматически)</li>
+        </ul>
+    }
+    else
+    {
+        <p>У вас нет роли <code>admin</code> — управление пользователями/группами недоступно.</p>
+    }
+    <h2>Фиксированные константы (создавать нельзя)</h2>
+    <p class="muted">Роли: <code>@string.Join("</code>, <code>", ServiceCatalog.Roles)</code></p>
+    <p class="muted">Сервисы: <code>@string.Join("</code>, <code>", ServiceCatalog.Services)</code></p>
+</div>
+
+<div class="card">
+    <h2 style="margin-top:0">API</h2>
+    <p class="muted">Тот же функционал — REST: <code>GET /api/users</code>, <code>POST /api/users</code>,
+       <code>GET/POST/DELETE /api/groups</code>, <code>POST /api/users/{id}/password</code>,
+       суперадмин — <code>/api/organizations</code>. Авторизация — Bearer-JWT realm rulink.
+       Org-изоляция: доступ к чужой организации → 403.</p>
+</div>

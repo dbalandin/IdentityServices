@@ -1,0 +1,42 @@
+@page
+@model Portal.Pages.GroupsModel
+@{
+    ViewData["Title"] = "Группы";
+}
+
+<h1>Группы — @Model.Organization</h1>
+<p class="muted">Группы вашей организации именуются с префиксом <code>@(Model.Organization)-</code>
+   (имена групп уникальны в масштабе realm, план §4). Префикс добавляет портал.</p>
+
+<table>
+    <thead><tr><th>Имя</th><th></th></tr></thead>
+    <tbody>
+        @foreach (var g in Model.Groups)
+        {
+            <tr>
+                <td>@g.Name</td>
+                <td>
+                    <form method="post" asp-page-handler="Delete" class="inline"
+                          onsubmit="return confirm('Удалить группу @g.Name?')">
+                        <input type="hidden" name="id" value="@g.Id" />
+                        <button type="submit" class="danger">удалить</button>
+                    </form>
+                </td>
+            </tr>
+        }
+        @if (Model.Groups.Count == 0)
+        {
+            <tr><td colspan="2" class="muted">групп нет</td></tr>
+        }
+    </tbody>
+</table>
+
+<h2>Создать группу</h2>
+<div class="card">
+    <form method="post" asp-page-handler="Create">
+        <label asp-for="Name">Имя (без префикса организации)</label>
+        <input type="text" asp-for="Name" required maxlength="100" placeholder="team-c" />
+        <p class="muted">Будет создана группа <code>@(Model.Organization)-&lt;имя&gt;</code></p>
+        <button type="submit">Создать</button>
+    </form>
+</div>

@@ -1,6 +1,6 @@
 # Task 07: src/portal — ASP.NET 10 портал администратора (P4)
 
-- **Статус:** open
+- **Статус:** done (реализовано + тесты Portal.Tests 20/20 PASS на фейке Admin REST: org-изоляция 403, валидации 400, суперадмин, UI-challenge; живой прогон compose+init+портал — остаточная проверка владельца через suite task-08, docker-сокет в среде агента недоступен)
 - **Фаза:** PRD P4
 - **Зависимости:** task-02 (realm, клиент `portal`, организации, пользователи)
 - **Источник:** план §5.7, §6; PRD FR 6, milestone P4
@@ -33,12 +33,12 @@
 
 ## Критерии готовности (из плана §7, P4)
 
-- [ ] Через API портала создан пользователь в org A (email, роль, группа, services)
-- [ ] admin org A получает 403 при доступе к пользователям org B
-- [ ] Суперадмин создаёт организацию и меняет её `availableServices`
-- [ ] Назначение пользователю сервиса вне `availableServices` организации → 400
-- [ ] Web UI показывает пользователей/группы и позволяет создать пользователя
-- [ ] Запись в `docs/CHANGELOG.md`
+- [x] Через API портала создан пользователь в org A (email, роль, группа, services) — тест `CreateUser_Assigns_Role_Groups_Services_Org_And_TempPassword` (мок Admin REST); живой прогон — suite task-08 (владелец)
+- [x] admin org A получает 403 при доступе к пользователям org B — `Cross_Org_User_Access_Is_Forbidden` (GET/PUT/DELETE/password)
+- [x] Суперадмин создаёт организацию и меняет её `availableServices` — `SuperAdmin_Lists_Creates_And_Updates_Organizations`
+- [x] Назначение пользователю сервиса вне `availableServices` организации → 400 — `CreateUser_With_Service_Outside_Org_AvailableServices_Is_400`
+- [x] Web UI показывает пользователей/группы и позволяет создать пользователя — Razor Pages (Users/Groups/Organizations/Index); автопроверка — OIDC-challenge (`Root_Page_Challenges_With_Oidc_Redirect`), живой просмотр в браузере — владелец
+- [x] Запись в `docs/CHANGELOG.md`
 
 ## Ссылки
 

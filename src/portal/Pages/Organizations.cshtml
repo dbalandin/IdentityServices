@@ -1,0 +1,62 @@
+@page
+@model Portal.Pages.OrganizationsModel
+@{
+    ViewData["Title"] = "Организации";
+}
+
+<h1>Организации (суперадмин)</h1>
+<p class="muted">availableServices задаёт, какие сервисы доступно назначать пользователям организации
+   (PRD FR 6.6). Элементы scope фиксированы каталогом: <code>@string.Join("</code>, <code>", ServiceCatalog.Services)</code>.</p>
+
+<table>
+    <thead><tr><th>Alias</th><th>Название</th><th>availableServices</th></tr></thead>
+    <tbody>
+        @foreach (var o in Model.Orgs)
+        {
+            <tr>
+                <td>@o.Alias</td>
+                <td>@o.Name</td>
+                <td>@string.Join(", ", o.AvailableServices)</td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+<h2>Создать организацию</h2>
+<div class="card">
+    <form method="post" asp-page-handler="Create">
+        <label asp-for="Alias">Alias (2–31, [a-z0-9-]; префикс групп и домен)</label>
+        <input type="text" asp-for="Alias" required pattern="[a-z0-9][a-z0-9-]{1,30}" />
+        <label asp-for="Name">Название</label>
+        <input type="text" asp-for="Name" required />
+        <label>availableServices</label>
+        <div class="checks">
+            @foreach (var s in ServiceCatalog.Services)
+            {
+                <label><input type="checkbox" name="CreateServices" value="@s" checked /> @s</label>
+            }
+        </div>
+        <button type="submit">Создать</button>
+    </form>
+</div>
+
+<h2>Изменить availableServices</h2>
+<div class="card">
+    <form method="post" asp-page-handler="Update">
+        <label asp-for="UpdateAlias">Alias организации</label>
+        <select asp-for="UpdateAlias">
+            @foreach (var o in Model.Orgs)
+            {
+                <option value="@o.Alias">@o.Alias</option>
+            }
+        </select>
+        <label>availableServices (заменяются целиком)</label>
+        <div class="checks">
+            @foreach (var s in ServiceCatalog.Services)
+            {
+                <label><input type="checkbox" name="UpdateServices" value="@s" /> @s</label>
+            }
+        </div>
+        <button type="submit">Сохранить</button>
+    </form>
+</div>

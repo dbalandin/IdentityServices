@@ -1,0 +1,68 @@
+@page
+@model Portal.Pages.UsersModel
+@{
+    ViewData["Title"] = "Пользователи";
+}
+
+<h1>Пользователи — @Model.Organization</h1>
+<p class="muted">Только пользователи вашей организации (клейм <code>organization</code> JWT).</p>
+
+<table>
+    <thead>
+        <tr><th>Email (username)</th><th>Имя</th><th>Фамилия</th><th>Сервисы</th><th>Активен</th></tr>
+    </thead>
+    <tbody>
+        @foreach (var u in Model.Users)
+        {
+            <tr>
+                <td>@u.Username</td>
+                <td>@u.FirstName</td>
+                <td>@u.LastName</td>
+                <td>@string.Join(", ", u.Services)</td>
+                <td>@(u.Enabled ? "да" : "нет")</td>
+            </tr>
+        }
+        @if (Model.Users.Count == 0)
+        {
+            <tr><td colspan="5" class="muted">пользователей нет</td></tr>
+        }
+    </tbody>
+</table>
+
+<h2>Создать пользователя</h2>
+<div class="card">
+    <form method="post" asp-page-handler="Create">
+        <label asp-for="Email">Email (username) *</label>
+        <input type="email" asp-for="Email" required />
+        <label asp-for="FirstName">Имя</label>
+        <input type="text" asp-for="FirstName" />
+        <label asp-for="LastName">Фамилия</label>
+        <input type="text" asp-for="LastName" />
+        <label asp-for="Role">Роль (фиксированные: user / admin / auditor)</label>
+        <select asp-for="Role">
+            @foreach (var r in ServiceCatalog.Roles)
+            {
+                <option value="@r">@r</option>
+            }
+        </select>
+        <label>Группы вашей организации</label>
+        <div class="checks">
+            @foreach (var g in Model.Groups)
+            {
+                <label><input type="checkbox" name="SelectedGroups" value="@g.Name" /> @g.Name</label>
+            }
+        </div>
+        <label>Сервисы (availableServices организации: @string.Join(", ", Model.OrgServices))</label>
+        <div class="checks">
+            @foreach (var s in ServiceCatalog.Services)
+            {
+                <label><input type="checkbox" name="SelectedServices" value="@s" /> @s</label>
+            }
+        </div>
+        <label asp-for="Password">Временный пароль (опционально, минимум 8 символов)</label>
+        <input type="password" asp-for="Password" autocomplete="new-password" />
+        <p class="muted">При заданном пароле пользователю будет назначен required action <code>UPDATE_PASSWORD</code> —
+           при первом входе он сменит пароль сам.</p>
+        <button type="submit">Создать</button>
+    </form>
+</div>

@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] — RuLink Admin Portal</title>
+    <style>
+        :root { --line:#ddd; --accent:#2563eb; --muted:#666; }
+        * { box-sizing:border-box; }
+        body { font-family:system-ui,-apple-system,"Segoe UI",sans-serif; margin:0; color:#111; background:#fafafa; }
+        header { background:#0f172a; color:#fff; padding:.7rem 1.2rem; display:flex; gap:1.5rem; align-items:center; }
+        header a { color:#dbeafe; text-decoration:none; font-size:.95rem; }
+        header a:hover { color:#fff; }
+        header .brand { font-weight:600; font-size:1.05rem; color:#fff; }
+        header .spacer { flex:1; }
+        main { max-width:960px; margin:1.5rem auto; padding:0 1rem; }
+        table { width:100%; border-collapse:collapse; background:#fff; border:1px solid var(--line); }
+        th, td { text-align:left; padding:.45rem .6rem; border-bottom:1px solid var(--line); font-size:.92rem; }
+        th { background:#f1f5f9; }
+        form.inline { display:inline; }
+        button, .btn { background:var(--accent); color:#fff; border:0; padding:.45rem .9rem; border-radius:6px; cursor:pointer; font-size:.9rem; text-decoration:none; }
+        button.danger { background:#dc2626; }
+        .card { background:#fff; border:1px solid var(--line); border-radius:8px; padding:1rem 1.2rem; margin:1rem 0; }
+        .muted { color:var(--muted); font-size:.85rem; }
+        .ok { background:#dcfce7; border:1px solid #86efac; padding:.5rem .8rem; border-radius:6px; margin:.5rem 0; }
+        .err { background:#fee2e2; border:1px solid #fca5a5; padding:.5rem .8rem; border-radius:6px; margin:.5rem 0; white-space:pre-line; }
+        label { display:block; font-size:.85rem; margin:.6rem 0 .15rem; }
+        input[type=text], input[type=email], input[type=password], select { width:100%; max-width:420px; padding:.4rem .5rem; border:1px solid var(--line); border-radius:6px; }
+        .checks label { display:inline-block; margin:.15rem .8rem .15rem 0; font-size:.9rem; }
+        h1 { font-size:1.3rem; } h2 { font-size:1.05rem; margin-top:1.4rem; }
+        code { background:#eef2ff; padding:.1rem .3rem; border-radius:4px; }
+    </style>
+</head>
+<body>
+<header>
+    <span class="brand">RuLink Admin Portal</span>
+    @if (User.Identity?.IsAuthenticated == true)
+    {
+        <a asp-page="/Users">Пользователи</a>
+        <a asp-page="/Groups">Группы</a>
+        @if (PortalAdminService.IsSuperAdmin(User))
+        {
+            <a asp-page="/Organizations">Организации</a>
+        }
+        <span class="spacer"></span>
+        <span class="muted" style="color:#93c5fd">@User.Identity?.Name</span>
+        <a asp-page="/Logout">Выход</a>
+    }
+</header>
+<main>
+    @if (TempData["Ok"] is string ok) { <div class="ok">@ok</div> }
+    @if (TempData["Err"] is string err) { <div class="err">@err</div> }
+    @RenderBody()
+</main>
+</body>
+</html>
