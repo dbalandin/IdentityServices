@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>DemoApi</RootNamespace>
+    <!-- адрес задаётся в appsettings.json (Urls=http://127.0.0.1:10010):
+         demo-api 10010, keycloak 10020, портал 10030, demopage 10040 -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- тесты — отдельный проект ниже по дереву; исключаем из web-приложения -->
+    <Compile Remove="tests/**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Валидация JWT Keycloak по JWKS realm'а (docs/contracts/jwt-claims.md §7) -->
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.1" />
+  </ItemGroup>
+
+</Project>

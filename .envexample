@@ -45,6 +45,12 @@ PORTAL_CLIENT_SECRET=change-me-portal-client-secret
 # demo-api — public-клиент, секрет в OIDC-потоках не используется
 # (переменная зарезервирована для сервис-сервис сценариев)
 DEMO_CLIENT_SECRET=change-me-demo-client-secret
+# redirect-URI / web-origins клиента demo-api через запятую (task-04, задание 2:
+# OIDC-логин сайта examples/demopage). Пусто = dev-дефолт
+# [http://127.0.0.1:*/*,http://localhost:*/*]. Для прод-публикации сайта добавить
+# его https-URL, напр.: DEMO_API_REDIRECT_URIS=http://127.0.0.1:*/*,http://localhost:*/*,https://demo.rulink.io/*
+DEMO_API_REDIRECT_URIS=
+DEMO_API_WEB_ORIGINS=
 # разрешённые redirect-URI / web-origins портала (P4, dev-значения)
 PORTAL_REDIRECT_URIS=http://127.0.0.1:10030/*
 PORTAL_WEB_ORIGINS=http://127.0.0.1:10030

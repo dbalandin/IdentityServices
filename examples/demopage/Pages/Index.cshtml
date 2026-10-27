@@ -1,0 +1,8 @@
+@page
+@model Demopage.Pages.IndexModel
+@using Microsoft.AspNetCore.Authorization
+@attribute [AllowAnonymous]
+
+<h1>Публичная страница (AllowAnonymous)</h1>
+<p>Эта страница доступна без аутентификации.</p>
+<p>Защищённая страница: <a asp-page="/Private">/Private</a> — потребует вход через IdentityService (Keycloak realm <code>rulink</code>).</p>

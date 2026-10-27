@@ -1,0 +1,45 @@
+@using Microsoft.AspNetCore.Authentication.OpenIdConnect
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>demopage — RuLink IdentityServices</title>
+    <style>
+        body { font-family: system-ui, sans-serif; margin: 0; background: #f5f6f8; color: #1c2530; }
+        header { background: #14213d; color: #fff; padding: 12px 24px; display: flex; gap: 24px; align-items: center; }
+        header a { color: #c9d6ff; text-decoration: none; }
+        header a:hover { color: #fff; }
+        .user { margin-left: auto; }
+        main { max-width: 880px; margin: 32px auto; padding: 0 16px; }
+        table { border-collapse: collapse; width: 100%; background: #fff; }
+        th, td { border: 1px solid #d7dde6; padding: 6px 10px; text-align: left; font-size: 14px; }
+        th { background: #eef1f6; }
+        code { background: #eef1f6; padding: 1px 5px; border-radius: 4px; }
+        .ok { color: #0a7d38; } .err { color: #b3261e; }
+    </style>
+</head>
+<body>
+<header>
+    <strong>demopage</strong>
+    <a asp-page="/Index">Публичная</a>
+    <a asp-page="/Private">Защищённая</a>
+    <span class="user">
+        @if (User.Identity?.IsAuthenticated == true)
+        {
+            <span>@User.Identity.Name</span>
+            <form method="post" asp-page="/Logout" style="display:inline">
+                <button type="submit" style="background:none;border:none;color:#c9d6ff;cursor:pointer;text-decoration:underline">Выйти</button>
+            </form>
+        }
+        else
+        {
+            <a asp-page="/Private">Войти</a>
+        }
+    </span>
+</header>
+<main>
+    @RenderBody()
+</main>
+</body>
+</html>

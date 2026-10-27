@@ -176,6 +176,12 @@ get_client_id() { kc get clients -r "$REALM" -q "clientId=$1" --fields id --form
 PORTAL_REDIRECT_JSON='["'"$(json_escape "${PORTAL_REDIRECT_URIS:-http://127.0.0.1:10030/*}")"'"]'
 PORTAL_ORIGINS_JSON='["'"$(json_escape "${PORTAL_WEB_ORIGINS:-http://127.0.0.1:10030}")"'"]'
 
+# redirect URIs клиента demo-api: через запятую; dev-дефолт — wildcard localhost/127.0.0.1
+# (задание 2 task-04: сайт examples/demopage — http://127.0.0.1:10040/signin-oidc входит в wildcard;
+# для прод-публикации добавить https-URL сайта: DEMO_API_REDIRECT_URIS="http://127.0.0.1:*/*,http://localhost:*/*,https://demo.rulink.io/*")
+DEMO_REDIRECT_JSON='['"$(printf '%s' "${DEMO_API_REDIRECT_URIS:-http://127.0.0.1:*/*,http://localhost:*/*}" | tr ',' '\n' | sed 's/^/"/;s/$/"/' | paste -sd, -)"']'
+DEMO_ORIGINS_JSON='['"$(printf '%s' "${DEMO_API_WEB_ORIGINS:-+}" | tr ',' '\n' | sed 's/^/"/;s/$/"/' | paste -sd, -)"']'
+
 # portal — confidential + сервис-аккаунт (Admin REST для портала, P4)
 portal_id=$(get_client_id portal)
 if [ -z "$portal_id" ]; then
@@ -197,21 +203,22 @@ else
 fi
 kc update "clients/$portal_id/default-client-scopes/$org_scope" -r "$REALM" 2>/dev/null || true
 
-# demo-api — public (инструкции P2/P3, direct access grants для автотеста task-08)
+# demo-api — public (инструкции P2/P3, direct access grants для автотеста task-08;
+# standard flow — OIDC-логин демо-сайта examples/demopage, задание 2 task-04)
 demo_id=$(get_client_id demo-api)
 if [ -z "$demo_id" ]; then
   kc create clients -r "$REALM" \
     -s clientId=demo-api -s name="RuLink Demo API" -s enabled=true \
     -s publicClient=true \
     -s standardFlowEnabled=true -s directAccessGrantsEnabled=true \
-    -s 'redirectUris=["http://127.0.0.1:*/*","http://localhost:*/*"]' -s 'webOrigins=["+"]'
+    -s "redirectUris=$DEMO_REDIRECT_JSON" -s "webOrigins=$DEMO_ORIGINS_JSON"
   demo_id=$(get_client_id demo-api)
   log "создан клиент demo-api (public, direct access grants ON — dev/test)"
 else
   kc update "clients/$demo_id" -r "$REALM" \
     -s enabled=true -s publicClient=true \
     -s standardFlowEnabled=true -s directAccessGrantsEnabled=true \
-    -s 'redirectUris=["http://127.0.0.1:*/*","http://localhost:*/*"]' -s 'webOrigins=["+"]'
+    -s "redirectUris=$DEMO_REDIRECT_JSON" -s "webOrigins=$DEMO_ORIGINS_JSON"
   log "клиент demo-api обновлён"
 fi
 kc update "clients/$demo_id/default-client-scopes/$org_scope" -r "$REALM" 2>/dev/null || true

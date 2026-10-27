@@ -1,6 +1,6 @@
 # Task 04: examples/demopage/demo-api — .NET 10 демо-сервис
 
-- **Статус:** open
+- **Статус:** in progress (код готов; автотесты на мок-OIDC 28/28, smoke-прогоны ок; живой прогон против Keycloak — владельцем: docker в среде агента недоступен)
 - **Фаза:** PRD P1/P3 (живая проверка инструкций P2/P3)
 - **Зависимости:** task-02 (realm, клиент `demo-api`), task-03 (контракт клеймов)
 - **Источник:** план §5.4; PRD FR 4–5
@@ -34,13 +34,17 @@
 
 ## Критерии готовности
 
-- [ ] `dotnet run` поднимает сервис, endpoints отвечают согласно авторизации:
-  - анонимный — 200; защищённые без токена — 401
-  - `/admin` с ролью admin — 200, без роли — 403
-  - `/audit` с ролью auditor — 200, без роли — 403
-  - `/group-data`: два пользователя одной группы — 200; пользователь другой группы/организации — 403
-- [ ] Сервис соответствует контракту `docs/contracts/jwt-claims.md`
-- [ ] Запись в `docs/CHANGELOG.md`
+- [x] `dotnet run` поднимает сервис (smoke: `/public` 200, защищённые без токена 401); авторизация endpoints — автотесты на мок-OIDC (28/28):
+  - [x] анонимный — 200; защищённые без токена — 401
+  - [x] `/admin` с ролью admin — 200, без роли — 403 (alice/dave 200, bob/carol 403)
+  - [x] `/audit` с ролью auditor — 200, без роли — 403 (carol 200, alice/bob 403)
+  - [x] `/group-data`: bob+carol (orga-team-a) — 200; alice/dave/erin (другая группа/организация) — 403
+  - [ ] то же живьём против compose-Keycloak (password grant) — владелец, сценарии в `examples/demo-api/README.md`
+- [x] Сервис соответствует контракту `docs/contracts/jwt-claims.md` — хелперы клеймов (§7), валидация iss/aud/подписи RS256/lifetime — автотесты (`MockOidcAuthority`, seeded-пользователи §4)
+- [x] Задание 2: demopage — `/Index` AllowAnonymous 200, `/Private` 302 на IdP (`…/protocol/openid-connect/auth`, client_id=demo-api, PKCE, redirect_uri `…/signin-oidc`) — smoke dev+Production (профили appsettings);
+      артефакты токена — README demopage §«Артефакты» + bootstrap: redirect URIs клиента demo-api параметризованы env (`DEMO_API_REDIRECT_URIS`/`DEMO_API_WEB_ORIGINS`)
+- [ ] Живой OIDC-логин на demopage (браузер + Keycloak) — владелец
+- [x] Запись в `docs/CHANGELOG.md`
 
 ## Ссылки
 

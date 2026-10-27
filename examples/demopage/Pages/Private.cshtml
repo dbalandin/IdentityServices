@@ -1,0 +1,29 @@
+@page
+@model Demopage.Pages.PrivateModel
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+
+<h1>Защищённая страница ([Authorize])</h1>
+<p>Вход выполнен через IdentityService. Клеймы текущего пользователя (контракт <code>docs/contracts/jwt-claims.md</code>):</p>
+
+<table>
+    <tr><th>Claim</th><th>Значение</th></tr>
+    <tr><td>sub</td><td><code>@Model.Sub</code></td></tr>
+    <tr><td>preferred_username</td><td><code>@Model.Username</code></td></tr>
+    <tr><td>email / verified</td><td><code>@Model.Email</code> / @Model.EmailVerified</td></tr>
+    <tr><td>organization</td><td><code>@Model.Organization</code></td></tr>
+    <tr><td>groups</td><td><code>@string.Join(", ", Model.Groups)</code></td></tr>
+    <tr><td>realm_access.roles</td><td><code>@string.Join(", ", Model.Roles)</code></td></tr>
+    <tr><td>scope (сервисы)</td><td><code>@string.Join(", ", Model.Services)</code></td></tr>
+</table>
+
+<h2>Вызов demo-api с access token</h2>
+<p>Тот же access token, что и для входа (SaveTokens=true), передаётся в <code>demo-api /me</code>:</p>
+@if (Model.ApiError is null)
+{
+    <pre class="ok">@Model.ApiResult</pre>
+}
+else
+{
+    <p class="err">@Model.ApiError</p>
+}
