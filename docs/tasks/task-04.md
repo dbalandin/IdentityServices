@@ -1,4 +1,4 @@
-# Task 04: examples/demo-api — .NET 10 демо-сервис
+# Task 04: examples/demopage/demo-api — .NET 10 демо-сервис
 
 - **Статус:** open
 - **Фаза:** PRD P1/P3 (живая проверка инструкций P2/P3)
@@ -11,6 +11,8 @@
 
 ## Что сделать
 
+### Задание 1.
+
 1. `examples/demo-api/` — ASP.NET Core **.NET 10** minimal api:
    - JWT bearer-валидация против realm `rulink` (authority `http://127.0.0.1:10020/realms/rulink`, audience `demo-api`);
    - role claim transformation: роли из `realm_access.roles` работают с `[Authorize(Roles = ...)]`.
@@ -22,6 +24,13 @@
    - `GET /group-data` — групповой ресурс: доступен только членам заданной группы (проверка клейма `groups`).
 3. Конфигурация — из appsettings + env (authority, audience), без секретов в репо.
 4. Зафиксировать изменение в `docs/CHANGELOG.md`.
+
+### Задание 2.
+
+1. сделать простое web applicaiton на ASP.Net Core **.Net 10** Razor
+2. сделать станицу с `[Authorize]` и страницу c AllowAnonymous
+3. Сделать редирект на IdentityService, он будет работать на url= `https://id.rulink.io`
+4. собири все артифакты, которые нужны для того, чтобы токен работал с сайтом.
 
 ## Критерии готовности
 
