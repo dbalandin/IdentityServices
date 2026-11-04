@@ -1,0 +1,39 @@
+# Шаблон окружения для deploy/docker-compose.yml (все ${VAR} из compose — здесь).
+# Копировать в .env репозитория и заполнить значения (секреты в репо не хранятся):
+#   cd deploy && cp .envexample ../.env
+#   docker compose --env-file ../.env up -d
+# Источник значений — владелец; ниже заглушки/примеры.
+
+# --- bootstrap-админ Keycloak (master; вход в админ-консоль http://127.0.0.1:10020)
+KC_BOOTSTRAP_ADMIN_USERNAME=CHANGE_ME_ADMIN
+KC_BOOTSTRAP_ADMIN_PASSWORD=CHANGE_ME_STRONG_PASSWORD
+
+# --- внешняя PostgreSQL (БД не поднимается compose; значения — из DBSERVER* владельца)
+KC_DB=postgres
+KC_DB_URL_HOST=CHANGE_ME_DB_HOST
+KC_DB_URL_PORT=5432
+KC_DB_URL_DATABASE=CHANGE_ME_DB_NAME
+KC_DB_USERNAME=CHANGE_ME_DB_USER
+KC_DB_PASSWORD=CHANGE_ME_DB_PASSWORD
+
+# --- http/hostname (dev/test: issuer контракта JWT = http://127.0.0.1:10020/realms/rulink)
+KC_HOSTNAME=127.0.0.1
+KC_HOSTNAME_PORT=10020
+
+# --- init-скрипт realm rulink (deploy/init/realm-bootstrap.sh; сервер KC их не использует)
+INIT_DEMO_PASSWORD=CHANGE_ME_DEMO_PASSWORD
+PORTAL_CLIENT_SECRET=CHANGE_ME_RANDOM_SECRET
+DEMO_CLIENT_SECRET=CHANGE_ME_RANDOM_SECRET
+PORTAL_REDIRECT_URIS=http://127.0.0.1:10030/*
+PORTAL_WEB_ORIGINS=http://127.0.0.1:10030
+# запятая-список доп. redirect/origins демо-сайта (пусто — wildcard по умолчанию)
+DEMO_API_REDIRECT_URIS=
+DEMO_API_WEB_ORIGINS=
+
+# --- SMTP (forgot password; пусто — функция не активна)
+SMTP_HOST=
+SMTP_PORT=587
+SMTP_USER=
+SMTP_PASSWORD=
+SMTP_FROM=
+SMTP_STARTTLS=false

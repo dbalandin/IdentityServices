@@ -6,8 +6,11 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Diagnostics;
+using NLog;
 using Portal;
+using Portal.Configuration;
 using Portal.KeycloakAdmin;
+using WebAppServicesExtensions;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // portal — ASP.NET Core (.NET 10) портал администратора IdentityService (task-07):
@@ -20,6 +23,13 @@ using Portal.KeycloakAdmin;
 // ─────────────────────────────────────────────────────────────────────────────
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Basic configuration
+builder.AddCustomConfiguration(Configuration.AppSettingsFilePath);
+builder.Services.AddCustomLogServices(Configuration.NlogConfigPath);
+builder.Services.AddCustomDataProtection(builder.Configuration);
+// Add ForwardedHeaders for proxy support
+builder.Services.AddForwardHeaders();
 
 var identity = builder.Configuration.GetSection("Identity");
 var authority = identity["Authority"]
@@ -120,6 +130,12 @@ builder.Services.AddScoped<PortalAdminService>();
 builder.Services.AddRazorPages();
 
 var app = builder.Build();
+LogHolder.Logger.Info("------ Application started ------");
+LogHolder.Logger.Info("Version: " + Configuration.Version);
+LogHolder.Logger.Info("Message: " + Configuration.Message);
+
+app.UseForwardedHeaders();
+app.UseGeneralMiddlewares();
 
 // ── ошибки API: Portal* → 403/404/400 (ProblemDetails-подобный JSON) ─────────
 
@@ -139,6 +155,8 @@ app.Use(async (ctx, next) =>
         await ApiErrorExtensions.WriteApiError(ctx, 502, "identity backend error");
     }
 });
+
+
 
 if (!app.Environment.IsDevelopment())
     app.UseExceptionHandler("/Error");
@@ -298,4 +316,10 @@ internal static class ApiErrorExtensions
             details = details ?? [],
         }, Json));
     }
+}
+
+
+static class LogHolder
+{
+    public static readonly Logger Logger = LogManager.GetCurrentClassLogger();
 }
