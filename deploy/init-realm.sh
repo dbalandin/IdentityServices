@@ -15,7 +15,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 ENV_FILE=../.env
-CONTAINER=identityservices-keycloak
+CONTAINER=keycloak-rulink
 
 log() { printf '[init-realm] %s\n' "$*"; }
 die() { printf '[init-realm] ОШИБКА: %s\n' "$*" >&2; exit 1; }

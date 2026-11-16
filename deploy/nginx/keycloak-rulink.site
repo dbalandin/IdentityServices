@@ -1,0 +1,26 @@
+server {
+        listen 443 ssl;
+        server_name idp.rulink.io;
+
+        include snippets/ssl.conf;
+        include snippets/https.common.conf;
+        include /etc/nginx/mime.types;
+
+        default_type application/json;
+        root /opt/services/keycloak/;                 
+
+        location / {
+                proxy_pass http://localhost:10020;
+                include snippets/httpsite.conf;
+                include snippets/headers.conf;
+
+                proxy_read_timeout 3600s;
+                proxy_send_timeout 3600s;
+        }
+}
+
+server {
+        listen 80;
+        server_name idp.rulink.io;  
+        return 301 https://$server_name$request_uri;
+}
