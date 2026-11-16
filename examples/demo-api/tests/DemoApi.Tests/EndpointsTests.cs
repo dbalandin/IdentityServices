@@ -78,6 +78,8 @@ public sealed class EndpointsTests(DemoApiFactory factory) : IClassFixture<DemoA
 
         var scope = me.GetProperty("scope").GetString()!;
         Assert.Contains("email", scope.Split(' '));
+        // контракт v1.1: сервисы — в отдельном клейме services, scope их не содержит
+        Assert.DoesNotContain(scope.Split(' '), s => s.EndsWith("service"));
     }
 
     // ── роли: /admin, /audit ────────────────────────────────────────────────────

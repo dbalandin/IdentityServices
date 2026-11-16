@@ -16,13 +16,13 @@
 ## 1. Постановка
 
 У пользователя есть группы (клейм `groups`), организация (`organization`) и набор сервисов
-(`scope`). Типовые требования к данным сервиса:
+(клейм `services`, контракт v1.1). Типовые требования к данным сервиса:
 
 | Требование | Чем закрываем |
 |---|---|
 | «Документ виден всем членам команды X и никому больше» | клейм `groups` + связка `ресурс ↔ группа` в БД сервиса (§3) |
 | «Раздел виден всей организации» | клейм `organization` (§4) |
-| «Функциональность доступна пользователям сервиса Y» | клейм `scope` (вхождение имени сервиса) — см. `dotnet-oauth.md` §4 |
+| «Функциональность доступна пользователям сервиса Y» | клейм `services` (вхождение имени сервиса) — см. `dotnet-oauth.md` §4 |
 
 Правило фазы 1: **группы и организация всегда читаются из токена** (источник истины — Keycloak),
 а не из query-параметров/тела запроса. Клиент не сообщает серверу, в какой он группе, — сервер
@@ -37,7 +37,7 @@
 |---|---|---|
 | `organization` | string (alias, у пользователя ровно одна) | `user.FindFirst("organization")?.Value` |
 | `groups` | array of string (имена групп **без пути**) | `user.FindAll("groups")` — **FindAll, не FindFirst** (нюанс ниже) |
-| `scope` | string, значения через пробел | `user.FindFirst("scope")?.Value.Split(' ')` — проверка доступа — **вхождение**, не равенство |
+| `services` | string, значения через пробел (v1.1) | `user.FindFirst("services")?.Value.Split(' ')` — проверка доступа — **вхождение**, не равенство |
 
 Нюанс `groups`: обработчик .NET 10 разворачивает JSON-массив примитивов в *несколько* клеймов
 `groups` (по одному на группу); в старом представлении — один клейм со значением-JSON-массивом.
@@ -58,13 +58,13 @@ public static IReadOnlyList<string> Groups(this ClaimsPrincipal user)
     return claims.Select(c => c.Value).Where(v => !string.IsNullOrEmpty(v)).ToList();
 }
 
-// scope — вхождение имени сервиса, не равенство строки
+// services — вхождение имени сервиса, не равенство строки (контракт v1.1)
 public static bool HasServiceScope(this ClaimsPrincipal user, string service)
-    => user.FindFirst("scope")?.Value.Split(' ').Contains(service) ?? false;
+    => user.FindFirst("services")?.Value.Split(' ').Contains(service) ?? false;
 ```
 
-`scope` кроме сервисов содержит стандартные OIDC-значения (`openid`, `email`, `profile`) — это
-нормально, фильтруйте по конкретному имени сервиса.
+`services` — отдельный строковый клейм (контракт v1.1); в `scope` сервисы не входят — там
+только стандартные OIDC-значения (`openid`, `email`, `profile`).
 
 ## 3. Паттерн «данные доступны всем пользователям группы»
 
@@ -234,7 +234,7 @@ var visible = await db.Documents
     .ToListAsync(ct);
 ```
 
-- `scope` (`HasServiceScope("cadastralservice")`) отвечает на «какой сервис разрешён», а не «чьи
+- `services` (`HasServiceScope("cadastralservice")`) отвечает на «какой сервис разрешён», а не «чьи
   данные» — для фильтрации записей его не использовать.
 
 Не смешивать: если ресурс объявлен групповым — организация сама по себе права не даёт (пользователь

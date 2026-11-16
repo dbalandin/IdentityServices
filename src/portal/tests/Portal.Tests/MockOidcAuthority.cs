@@ -84,7 +84,7 @@ public static class TestTokens
 {
     private static readonly string[] TechnicalRoles = ["default-roles-rulink", "offline_access", "uma_authorization"];
 
-    /// <summary>Токен пользователя realm: organization, groups, realm_access.roles (+технические), scope.
+    /// <summary>Токен пользователя realm: organization, groups, realm_access.roles (+технические), services (v1.1).
     /// organization=null → клейм отсутствует (суперадмин, вне организаций).</summary>
     public static IDictionary<string, object> Build(string email, string? organization,
         string[] roles, string[] groups, string services = "")
@@ -98,7 +98,8 @@ public static class TestTokens
             ["preferred_username"] = email,
             ["groups"] = groups,
             ["realm_access"] = new { roles = roles.Concat(TechnicalRoles).ToArray() },
-            ["scope"] = "openid email profile " + services,
+            ["scope"] = "openid email profile",
+            ["services"] = services,
         };
         if (organization is not null)
             claims["organization"] = organization;

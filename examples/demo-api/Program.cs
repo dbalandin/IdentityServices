@@ -30,7 +30,7 @@ builder.Services
         var requireHttps = bool.TryParse(identity["RequireHttpsMetadata"], out var v) ? v
             : Uri.TryCreate(authority, UriKind.Absolute, out var u) && u.Scheme != "https" ? false : true;
         o.RequireHttpsMetadata = requireHttps;
-        // оригинальные имена клеймов (organization, groups, scope, realm_access) — без маппинга в ClaimTypes.*
+        // оригинальные имена клеймов (organization, groups, services, realm_access) — без маппинга в ClaimTypes.*
         o.MapInboundClaims = false;
         o.TokenValidationParameters = new()
         {

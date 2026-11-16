@@ -46,7 +46,16 @@ json_escape() { local s=$1; s=${s//\\/\\\\}; s=${s//\"/\\\"}; printf '%s' "$s"; 
 id_first() { grep -oE '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -n1 || true; }
 
 # stdin: csv "id,<поле>"; $1 — точное значение поля, $2 — номер поля (по умолчанию 2)
-id_by_field() { awk -F, -v v="$1" -v n="${2:-2}" '$n==v {print $1; exit}' || true; }
+# (чистый bash — awk в минимальном образе keycloak отсутствует)
+id_by_field() {
+  local v="$1" n="${2:-2}" line
+  local -a f
+  while IFS= read -r line; do
+    IFS=, read -ra f <<<"$line"
+    if [ "${f[n-1]-}" = "$v" ]; then printf '%s\n' "${f[0]}"; return 0; fi
+  done
+  return 0
+}
 
 kc() { "$KCADM" "$@"; }
 
@@ -78,8 +87,9 @@ fi
 SMTP_JSON+=',"starttls":"'"${SMTP_STARTTLS:-false}"'"}'
 
 # brute force: блокировка после 5 неудач, нарастающее ожидание (план §6);
-# password policy: минимум 8 символов; email as username; forgot password ON;
-# direct access grants ON — ТОЛЬКО для dev/тестов (токен для автотеста task-08).
+# password policy: минимум 8 символов; email as username; forgot password ON.
+# (direct access grants — клиентская настройка, включается у клиента demo-api ниже;
+# на realm-уровне поля directAccessGrantsEnabled в 26.x нет — strict JSON)
 kc update "realms/$REALM" \
   -s loginWithEmailAllowed=true \
   -s registrationEmailAsUsername=true \
@@ -93,9 +103,21 @@ kc update "realms/$REALM" \
   -s permanentLockout=false \
   -s 'passwordPolicy=length(8)' \
   -s resetPasswordAllowed=true \
-  -s directAccessGrantsEnabled=true \
   -s "smtpServer=$SMTP_JSON"
 log "настройки realm применены (email-as-username, brute force 5/нарастающее ожидание, policy 8+, SMTP, forgot password)"
+
+# Keycloak 26: атрибуты пользователей проходят валидацию user profile;
+# незадекларированный атрибут services при записи молча отбрасывается.
+# Декларируем как managed-атрибут (edit: только admin). /tmp — внутри контейнера:
+# скрипт запускается через docker exec без stdin, поэтому -f - недоступен.
+if ! kc get users/profile -r "$REALM" 2>/dev/null | grep -q '"name" : "services"'; then
+  kc get users/profile -r "$REALM" 2>/dev/null \
+    | sed 's|"attributes" : \[ {|"attributes" : [\n    {"name":"services","displayName":"services","annotations":{},"permissions":{"view":["admin","user"],"edit":["admin"]},"multivalued":false},\n    {|' \
+    > /tmp/userprofile.json
+  kc update users/profile -r "$REALM" -f /tmp/userprofile.json
+  rm -f /tmp/userprofile.json
+  log "user profile: объявлен managed-атрибут services (edit: admin only)"
+fi
 
 # ---------- 2. realm roles (фиксированные; создаёт только этот скрипт/суперадмин) ----------
 for role in user admin auditor; do
@@ -111,8 +133,8 @@ done
 get_scope_id() { kc get client-scopes -r "$REALM" --fields id,name --format csv --noquotes 2>/dev/null | id_by_field "$1" 2 | id_first; }
 
 # scope `groups` + group membership mapper (плоский claim groups, имена групп).
-# include.in.token.scope=false: имя scope НЕ попадает в claim scope — там по контракту
-# только OIDC-значения + имена сервисов (jwt-claims.md §3)
+# include.in.token.scope=false: имя scope НЕ попадает в claim scope (там только OIDC-значения,
+# jwt-claims.md §3; сервисы — отдельным клеймом services, контракт v1.1)
 groups_scope=$(get_scope_id groups)
 if [ -z "$groups_scope" ]; then
   kc create client-scopes -r "$REALM" -s name=groups -s protocol=openid-connect \
@@ -127,7 +149,10 @@ if ! kc get "client-scopes/$groups_scope/protocol-mappers/models" -r "$REALM" --
   log "создан mapper groups (group membership -> claim groups)"
 fi
 
-# scope `services` + user attribute mapper (атрибут services -> claim scope, строка через пробел)
+# scope `services` + user attribute mapper (атрибут services -> отдельный клейм services).
+# ВАЖНО (контракт v1.1): клейм НЕ "scope" — в KC 26 штатная генерация scope-строки
+# затирает протокольный маппер с claim.name=scope (эмпирически на 26.7.5);
+# сервисы — отдельным строковым клеймом services через пробел.
 services_scope=$(get_scope_id services)
 if [ -z "$services_scope" ]; then
   kc create client-scopes -r "$REALM" -s name=services -s protocol=openid-connect \
@@ -135,11 +160,18 @@ if [ -z "$services_scope" ]; then
   services_scope=$(get_scope_id services)
   log "создан client scope services"
 fi
-if ! kc get "client-scopes/$services_scope/protocol-mappers/models" -r "$REALM" --fields name --format csv --noquotes 2>/dev/null | grep -qx services; then
+svc_mapper=$(kc get "client-scopes/$services_scope/protocol-mappers/models" -r "$REALM" --fields id,name --format csv --noquotes 2>/dev/null | id_by_field "services" 2 | id_first)
+SVC_MAPPER_CONFIG='{"user.attribute":"services","claim.name":"services","jsonType.label":"String","multivalued":"false","aggregate.attrs":"false","access.token.claim":"true","id.token.claim":"false","userinfo.token.claim":"false","introspection.token.claim":"true"}'
+if [ -z "$svc_mapper" ]; then
   kc create "client-scopes/$services_scope/protocol-mappers/models" -r "$REALM" \
     -s name=services -s protocol=openid-connect -s protocolMapper=oidc-usermodel-attribute-mapper \
-    -s 'config={"user.attribute":"services","claim.name":"scope","jsonType.label":"String","multivalued":"false","aggregate.attrs":"false","access.token.claim":"true","id.token.claim":"false","introspection.endpoint.claim":"true"}'
-  log "создан mapper services (user attribute services -> claim scope)"
+    -s "config=$SVC_MAPPER_CONFIG"
+  log "создан mapper services (user attribute services -> claim services)"
+else
+  kc update "client-scopes/$services_scope/protocol-mappers/models/$svc_mapper" -r "$REALM" \
+    -s name=services -s protocol=openid-connect -s protocolMapper=oidc-usermodel-attribute-mapper \
+    -s "config=$SVC_MAPPER_CONFIG"
+  log "mapper services приведён к контракту v1.1 (claim.name=services)"
 fi
 
 # встроенный scope `organization`: приводим Organization Membership mapper к multivalued=false,
@@ -151,24 +183,34 @@ if [ -z "$org_scope" ]; then
   org_scope=$(get_scope_id organization)
   log "создан client scope organization (не было встроенного)"
 fi
-org_mapper=$(kc get "client-scopes/$org_scope/protocol-mappers/models" -r "$REALM" --fields id,protocolMapper --format csv --noquotes 2>/dev/null | awk -F, '$2=="oidc-organization-membership-mapper"{print $1}' | id_first)
+org_mapper=$(kc get "client-scopes/$org_scope/protocol-mappers/models" -r "$REALM" --fields id,protocolMapper --format csv --noquotes 2>/dev/null | id_by_field "oidc-organization-membership-mapper" 2 | id_first)
+# важные флаги: access.token.claim=true (без него клейм не попадает в access token —
+# дефолт false), introspection.token.claim=true; multivalued=false — claim = alias строкой
+ORG_MAPPER_CONFIG='{"claim.name":"organization","multivalued":"false","jsonType.label":"String","access.token.claim":"true","id.token.claim":"false","userinfo.token.claim":"false","introspection.token.claim":"true","addOrganizationAttributes":"false","addOrganizationId":"false"}'
 if [ -z "$org_mapper" ]; then
   kc create "client-scopes/$org_scope/protocol-mappers/models" -r "$REALM" \
     -s name=organization -s protocol=openid-connect -s protocolMapper=oidc-organization-membership-mapper \
-    -s 'config={"claim.name":"organization","multivalued":"false"}'
-  log "создан Organization Membership mapper (multivalued=false)"
+    -s "config=$ORG_MAPPER_CONFIG"
+  log "создан Organization Membership mapper (multivalued=false, access token claim ON)"
 else
   kc update "client-scopes/$org_scope/protocol-mappers/models/$org_mapper" -r "$REALM" \
     -s name=organization -s protocol=openid-connect -s protocolMapper=oidc-organization-membership-mapper \
-    -s 'config={"claim.name":"organization","multivalued":"false"}'
-  log "Organization Membership mapper приведён к multivalued=false (claim organization = alias строкой)"
+    -s "config=$ORG_MAPPER_CONFIG"
+  log "Organization Membership mapper приведён к multivalued=false + access.token.claim (claim organization = alias строкой)"
 fi
 
-# группы и services — дефолтные scope всего realm; organization — опциональный realm-wide,
-# но дефолт для клиентов portal и demo-api (см. ниже)
+# группы и services — дефолтные scope всего realm; organization — дефолт для клиентов
+# portal и demo-api (см. ниже)
 kc update "default-default-client-scopes/$groups_scope" -r "$REALM" 2>/dev/null || true
 kc update "default-default-client-scopes/$services_scope" -r "$REALM" 2>/dev/null || true
 log "client scopes groups/services добавлены в default realm scopes"
+
+# сделать client scope дефолтным для клиента: Keycloak молча игнорирует PUT в default,
+# если scope уже числится в optional — поэтому сначала убираем из optional (идемпотентно)
+set_client_scope_default() { # $1 client uuid, $2 scope uuid
+  kc delete "clients/$1/optional-client-scopes/$2" -r "$REALM" >/dev/null 2>&1 || true
+  kc update "clients/$1/default-client-scopes/$2" -r "$REALM" 2>/dev/null || true
+}
 
 # ---------- 4. клиенты ----------
 get_client_id() { kc get clients -r "$REALM" -q "clientId=$1" --fields id --format csv --noquotes 2>/dev/null | id_first; }
@@ -201,7 +243,7 @@ else
     -s "redirectUris=$PORTAL_REDIRECT_JSON" -s "webOrigins=$PORTAL_ORIGINS_JSON"
   log "клиент portal обновлён"
 fi
-kc update "clients/$portal_id/default-client-scopes/$org_scope" -r "$REALM" 2>/dev/null || true
+set_client_scope_default "$portal_id" "$org_scope"
 
 # demo-api — public (инструкции P2/P3, direct access grants для автотеста task-08;
 # standard flow — OIDC-логин демо-сайта examples/demopage, задание 2 task-04)
@@ -221,7 +263,7 @@ else
     -s "redirectUris=$DEMO_REDIRECT_JSON" -s "webOrigins=$DEMO_ORIGINS_JSON"
   log "клиент demo-api обновлён"
 fi
-kc update "clients/$demo_id/default-client-scopes/$org_scope" -r "$REALM" 2>/dev/null || true
+set_client_scope_default "$demo_id" "$org_scope"
 
 # audience mapper для demo-api: claim aud = [account, demo-api] (контракт JWT §3:
 # «для demo-api — audience mapper, task-02»)
@@ -268,9 +310,14 @@ ensure_org() { # $1 alias, $2 name, $3 domain
 org_a=$(ensure_org orga "Org A" orga.example.com)
 org_b=$(ensure_org orgb "Org B" orgb.example.com)
 
-org_has_member() { # $1 org id, $2 username
-  kc get "organizations/$1/members" -r "$REALM" -q max=100 --fields id,username --format csv --noquotes 2>/dev/null \
-    | awk -F, -v u="$2" '$2==u{f=1} END{exit !f}'
+org_has_member() { # $1 org id, $2 username — код возврата 0, если состоит
+  local line u="$2" found=0
+  local -a f
+  while IFS= read -r line; do
+    IFS=, read -ra f <<<"$line"
+    if [ "${f[1]-}" = "$u" ]; then found=1; break; fi
+  done < <(kc get "organizations/$1/members" -r "$REALM" -q max=100 --fields id,username --format csv --noquotes 2>/dev/null)
+  [ "$found" = 1 ]
 }
 org_add_member() { # $1 org id, $2 user id
   printf '"%s"' "$2" | kc create "organizations/$1/members" -r "$REALM" -f -
@@ -310,20 +357,23 @@ while IFS=';' read -r username first last roles group org_alias; do
     erin@*)  services='cryptoservice' ;;
     *) die "нет описания services для $username" ;;
   esac
-  attrs='{"services":["'"$(json_escape "$services")"'"]}'
 
   if [ -z "$uid" ]; then
     kc create users -r "$REALM" \
       -s "username=$username" -s "email=$username" -s emailVerified=true -s enabled=true \
-      -s "firstName=$first" -s "lastName=$last" -s "attributes=$attrs"
+      -s "firstName=$first" -s "lastName=$last"
     uid=$(get_user_id "$username")
     log "создан пользователь $username"
-  else
-    kc update "users/$uid" -r "$REALM" \
-      -s "email=$username" -s emailVerified=true -s enabled=true \
-      -s "firstName=$first" -s "lastName=$last" -s "attributes=$attrs"
-    log "пользователь $username обновлён"
   fi
+
+  # профиль + атрибут services: ПОЛНЫЙ PUT (частичный затирает firstName/lastName
+  # в null и ломает логин "Account is not fully set up"; в 26.x PUT заменяет всю
+  # UserRepresentation). /tmp — внутри контейнера: без stdin (-f - недоступен).
+  printf '{"username":"%s","email":"%s","firstName":"%s","lastName":"%s","enabled":true,"emailVerified":true,"requiredActions":[],"attributes":{"services":["%s"]}}' \
+    "$username" "$username" "$first" "$last" "$services" > /tmp/user-attrs.json
+  kc update "users/$uid" -r "$REALM" -f /tmp/user-attrs.json
+  rm -f /tmp/user-attrs.json
+  log "  профиль/атрибут services применены"
 
   # демо-пароль (не в репо, только env); password policy >= 8 проверена выше
   kc set-password -r "$REALM" --username "$username" --new-password "$INIT_DEMO_PASSWORD" >/dev/null

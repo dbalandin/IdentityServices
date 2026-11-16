@@ -23,7 +23,7 @@ public sealed class JwtContractTests : IClassFixture<OidcClient>
     [
         "iss", "sub", "exp", "iat", "jti", "typ", "azp", "aud",
         "email", "email_verified", "preferred_username",
-        "organization", "groups", "realm_access", "scope",
+        "organization", "groups", "realm_access", "scope", "services",
     ];
 
     public JwtContractTests(OidcClient oidc, ITestOutputHelper output)
@@ -78,11 +78,14 @@ public sealed class JwtContractTests : IClassFixture<OidcClient>
                 r => Assert.True(SeedUser.All.Values.SelectMany(u => u.Roles).Contains(r!) || r is "user" or "admin" or "auditor",
                     $"{key}: неожидаемая прикладная роль {r}"));
 
-            // §8.6: scope содержит все сервисы пользователя (вхождение) и не содержит чужих
-            var scopes = claims["scope"].GetString()!.Split(' ', StringSplitOptions.RemoveEmptyEntries).ToList();
+            // §8.6 (v1.1): клейм services — все сервисы пользователя (вхождение), без чужих;
+            // scope — только стандартные OIDC-значения, сервисов в нём нет
+            var servicesClaim = claims["services"].GetString()!.Split(' ', StringSplitOptions.RemoveEmptyEntries).ToList();
             foreach (var svc in seed.Services)
-                Assert.Contains(svc, scopes);
-            Assert.DoesNotContain(scopes, s => s.EndsWith("service") && !SeedUser.All.Values.SelectMany(u => u.Services).Contains(s));
+                Assert.Contains(svc, servicesClaim);
+            Assert.DoesNotContain(servicesClaim, s => s.EndsWith("service") && !SeedUser.All.Values.SelectMany(u => u.Services).Contains(s));
+            var scopeClaim = claims["scope"].GetString()!.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            Assert.DoesNotContain(scopeClaim, s => s.EndsWith("service"));
 
             _out.WriteLine($"{key}: ok ({seed.Organization}, {string.Join(",", seed.Groups)})");
         }

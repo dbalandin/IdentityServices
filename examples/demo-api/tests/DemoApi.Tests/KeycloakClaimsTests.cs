@@ -3,7 +3,7 @@ using Xunit;
 
 namespace DemoApi.Tests;
 
-/// <summary>Юнит-тесты хелперов клеймов (обе формы groups-клейма, scope-split, роли).</summary>
+/// <summary>Юнит-тесты хелперов клеймов (обе формы groups-клейма, services-split, роли).</summary>
 public sealed class KeycloakClaimsTests
 {
     private static ClaimsPrincipal Principal(params Claim[] claims)
@@ -45,10 +45,13 @@ public sealed class KeycloakClaimsTests
     }
 
     [Fact]
-    public void Services_Split_Scope_By_Space()
+    public void Services_Split_Claim_By_Space()
     {
-        var user = Principal(new Claim("scope", "openid email profile cryptoservice cadastralservice"));
-        Assert.Equal(["openid", "email", "profile", "cryptoservice", "cadastralservice"], user.Services());
+        // контракт v1.1: сервисы — отдельный клейм services, scope — только OIDC-значения
+        var user = Principal(
+            new Claim("scope", "openid email profile"),
+            new Claim("services", "cryptoservice cadastralservice"));
+        Assert.Equal(["cryptoservice", "cadastralservice"], user.Services());
         Assert.True(user.HasServiceScope("cryptoservice"));
         Assert.False(user.HasServiceScope("cadastralanalyticservice"));
     }

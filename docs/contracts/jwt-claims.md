@@ -1,8 +1,9 @@
 # Контракт JWT — realm `rulink`
 
-- **Версия контракта:** 1.0
-- **Дата:** 2026-10-26
+- **Версия контракта:** 1.1
+- **Дата:** 2026-11-16 (1.0 — 2026-10-26)
 - **Статус:** эталон (reference). Живой токен сверяется с этим файлом: вручную в task-02, автотестом в task-08.
+- **Изменения 1.1:** сервисы переехали из клейма `scope` в отдельный строковый клейм `services` — в Keycloak 26 штатная генерация scope-строки затирает протокольный маппер с `claim.name=scope` (найдено при живой сверке на 26.7.5, srv-05); `scope` теперь содержит только стандартные OIDC-значения. Потребители: читать `services` (хелпер `KeycloakClaims.Services()`).
 - **Источник:** план §4 «Контракт JWT», §5.3; PRD FR 2.
 - **Аудитория:** потребители экосистемы (.NET 10 / ASP.NET Core сервисы). Интеграции пишутся против этого контракта, а не против конкретной инсталляции Keycloak.
 
@@ -72,7 +73,8 @@
   "email": "alice@orga.example.com",
   "organization": "orga",
   "groups": ["orga-managers"],
-  "scope": "email profile cryptoservice cadastralservice cadastralanalyticservice"
+  "scope": "openid email profile",
+  "services": "cryptoservice cadastralservice cadastralanalyticservice"
 }
 ```
 
@@ -94,7 +96,8 @@
 | `groups` | **array of string — имена групп без пути** | да (может быть пустым) | group membership mapper (task-02): «Full group path» = OFF → только имена групп |
 | `realm_access.roles` | array of string | да | стандарт: роли пользователя в realm |
 | `resource_access.<client>.roles` | object | нет | стандарт: клиентские роли |
-| `scope` | **string — имена сервисов через пробел** (подмножество `availableServices` организации пользователя) | да | user attribute `services` → user attribute mapper (task-02, aggregate + single value → строка через пробел) |
+| `scope` | string — только стандартные OIDC-значения (`openid`, `email`, `profile` и имена подключённых client scope) | да | стандарт Keycloak (v1.1: сервисы сюда НЕ входят) |
+| `services` | **string — имена сервисов через пробел** (подмножество `availableServices` организации пользователя) | да (для пользователей) | user attribute `services` → user attribute mapper (task-02, v1.1: отдельный клейм — см. изменения 1.1) |
 
 Роли `realm_access.roles`:
 
@@ -102,11 +105,12 @@
 - технические роли Keycloak (`default-roles-rulink`, `offline_access`, `uma_authorization`) присутствуют всегда — **потребители обязаны их игнорировать**;
 - проверка роли — вхождение имени в массив (см. §7), не точное равенство всего массива.
 
-Клейм `scope`:
+Клейм `services` (v1.1):
 
-- кроме сервисов содержит стандартные OIDC-значения (`openid`, `email`, `profile` — что запрошено клиентом);
-- сервисы фазы 1: `cryptoservice`, `cadastralservice`, `cadastralanalyticservice`; список расширяем на уровне организаций (атрибут `availableServices`), значение у пользователя — всегда подмножество набора его организации;
-- проверка доступа к сервису — вхождение имени сервиса в `scope` (split по пробелу), не точное равенство строки.
+- строка имён сервисов через пробел — подмножество `availableServices` организации пользователя;
+- сервисы фазы 1: `cryptoservice`, `cadastralservice`, `cadastralanalyticservice`; список расширяем на уровне организаций (атрибут `availableServices`);
+- проверка доступа к сервису — вхождение имени сервиса в `services` (split по пробелу), не точное равенство строки;
+- `scope` — стандартный OIDC-клейм (openid/email/profile и имена выданных client scope, напр. `organization`); сервисы в нём НЕ передаются (ограничение Keycloak 26 — см. изменения 1.1).
 
 `aud`: сервисы-потребители проверяют `iss` + подпись обязательно; `aud` — если сервис заявил себя аудиторией (audience mapper). Для демо-сервисов фазы 1 достаточно дефолтного `account` + проверки `iss`/подписи (см. `docs/integrations/dotnet-oauth.md`, task-05).
 
@@ -114,7 +118,7 @@
 
 Эталонные данные, которыми task-02 сеет realm (пароли — только из env `INIT_DEMO_PASSWORD`, в репо и в этом файле их нет; `email_verified = true` у всех):
 
-| Пользователь (username = email) | Организация | Роли (`realm_access.roles`) | Группы (`groups`) | `services` (`scope`) |
+| Пользователь (username = email) | Организация | Роли (`realm_access.roles`) | Группы (`groups`) | `services` (клейм `services`) |
 |---|---|---|---|---|
 | `alice@orga.example.com` | `orga` | `user`, `admin` | `orga-managers` | `cryptoservice cadastralservice cadastralanalyticservice` |
 | `bob@orga.example.com` | `orga` | `user` | `orga-team-a` | `cryptoservice cadastralservice` |
@@ -217,9 +221,9 @@ public static class KeycloakClaimsExtensions
             ? JsonSerializer.Deserialize<string[]>(json) ?? []
             : [];
 
-    // scope — строка имён через пробел
+    // services — строка имён через пробел (клейм, не scope — контракт v1.1)
     public static bool HasServiceScope(this ClaimsPrincipal user, string service)
-        => user.FindFirst("scope")?.Value.Split(' ').Contains(service) ?? false;
+        => user.FindFirst("services")?.Value.Split(' ').Contains(service) ?? false;
 }
 ```
 
@@ -231,7 +235,7 @@ app.MapGet("/me", (ClaimsPrincipal user) => new
     user.Identity!.Name,
     Organization = user.Organization(),
     Groups = user.Groups(),
-    Services = user.FindFirst("scope")!.Value.Split(' '),
+    Services = user.FindFirst("services")!.Value.Split(' '),
 }).RequireAuthorization();
 
 app.MapGet("/admin", () => "admin ok").RequireAuthorization(policy =>
@@ -240,12 +244,12 @@ app.MapGet("/admin", () => "admin ok").RequireAuthorization(policy =>
 
 ## 8. Правила сверки токена с эталоном (для task-02 вручную и task-08 автотеста)
 
-1. **Обязательный состав клеймов** (наличие, не точные значения): `iss`, `sub`, `exp`, `iat`, `jti`, `typ`, `azp`, `aud`, `email`, `email_verified`, `preferred_username`, `organization`, `groups`, `realm_access`, `scope`.
+1. **Обязательный состав клеймов** (наличие, не точные значения): `iss`, `sub`, `exp`, `iat`, `jti`, `typ`, `azp`, `aud`, `email`, `email_verified`, `preferred_username`, `organization`, `groups`, `realm_access`, `scope`, `services`.
 2. `iss` = `<base>/realms/rulink`; `preferred_username` = `email`.
 3. `organization` — string, имя организации пользователя (одна из §4).
 4. `groups` — array of string, имена без пути (`/` в значениях недопустим), соответствует §4.
 5. `realm_access.roles` содержит `user` и прикладные роли этого пользователя из §4 (проверка — вхождение; технические `default-roles-rulink`, `offline_access`, `uma_authorization` допустимы и игнорируются).
-6. `scope` — набор сервисов пользователя из §4 (вхождение каждого имени), без сервисов вне `availableServices` организации.
+6. `services` — набор сервисов пользователя из §4 (вхождение каждого имени), без сервисов вне `availableServices` организации; `scope` — только стандартные OIDC-значения, сервисов в нём быть не должно (v1.1).
 7. Подпись RS256 валидна по JWKS realm'а; заголовок `kid` присутствует.
 8. Экземпляр-зависимые значения (`sub`, `jti`, `sid`, `iat`, `exp`, `kid`, `acr`, `allowed-origins`, `aud` сверх обязательных, `resource_access`, `name`/`given_name`/`family_name`) — не причина провала сверки.
 

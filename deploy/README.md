@@ -2,7 +2,7 @@
 
 Deploy scripts for Keycloak-rulink
 
-11-keycloak-rulink_image.sh - скачать образ. Работаем с версией не ниже 27 (нам нужны org)
+11-keycloak-rulink_image.sh - скачать образ. Работаем с версией не ниже 26.1 (нам нужны org)
 12-keycloak-rulink_deploy.sh - копируем все каталоги
 
 ## При первом запуске

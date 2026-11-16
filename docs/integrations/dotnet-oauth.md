@@ -7,7 +7,7 @@
 - **Эталон клеймов:** `docs/contracts/jwt-claims.md` — интеграция пишется против контракта, а не конкретной инсталляции Keycloak
 
 Результат инструкции: сервис с JWT bearer-валидацией против realm `rulink`, в котором работают
-`[Authorize]`, `[Authorize(Roles = "…")]` и чтение клеймов контракта (`organization`, `groups`, `scope`).
+`[Authorize]`, `[Authorize(Roles = "…")]` и чтение клеймов контракта (`organization`, `groups`, `services`; v1.1).
 Живой образец каждого фрагмента кода — `examples/demo-api` (task-04).
 
 ---
@@ -138,7 +138,7 @@ app.Run();
 |---|---|
 | `Authority` | По нему JwtBearer скачивает discovery-документ: issuer (`iss`), JWKS-URI. Смена окружения (prod hostname) — одно значение конфига |
 | `RequireHttpsMetadata = false` | Только dev: Keycloak опубликован на `http://127.0.0.1:10020`. С https-issuer не задавайте — метаданные обязаны идти по TLS |
-| `MapInboundClaims = false` | .NET по умолчанию *переименовывает* входящие клеймы в legacy-имена (`ClaimTypes.*`): `email` → `…emailaddress`, `sub` → `…nameidentifier` и т.д. Отключаем: клеймы контракта (`organization`, `groups`, `scope`, `realm_access`) читаются по их настоящим именам, как в токене |
+| `MapInboundClaims = false` | .NET по умолчанию *переименовывает* входящие клеймы в legacy-имена (`ClaimTypes.*`): `email` → `…emailaddress`, `sub` → `…nameidentifier` и т.д. Отключаем: клеймы контракта (`organization`, `groups`, `services`, `realm_access`) читаются по их настоящим именам, как в токене |
 | `NameClaimType = "preferred_username"` | `MapInboundClaims=false` убирает дефолтный маппинг имени — без этой строки `User.Identity.Name` будет пустым. По контракту `preferred_username` = email пользователя |
 | `Audience` / `ValidAudience` | Проверка `aud`-клейма: токен выдан в том числе вашему сервису. Требует audience mapper у клиента-эмитента (§1). Допустимо и слабее: проверять только `iss`+подпись (`ValidateAudience = false`, контракт §3) — но строгий вариант лучше |
 
@@ -242,7 +242,7 @@ app.MapGet("/me", (ClaimsPrincipal user) => Results.Ok(new
     email           = user.FindFirst("email")?.Value,
     organization    = user.FindFirst("organization")?.Value,
     groups          = user.FindAll("groups").Select(c => c.Value), // см. нюанс ниже
-    services        = user.FindFirst("scope")?.Value.Split(' '),   // scope — строка через пробел
+    services        = user.FindFirst("services")?.Value.Split(' '),   // services — строка через пробел (контракт v1.1)
     isInAdminRole   = user.IsInRole("admin"),               // роли из RealmRolesTransformer (§3)
 }))
 .RequireAuthorization();
@@ -253,7 +253,7 @@ app.MapGet("/me", (ClaimsPrincipal user) => Results.Ok(new
   `groups` (по одному на группу) — поэтому `FindAll`, а не `FindFirst`. Хелпер, устойчивый к обоим
   вариантам представления, — `examples/demo-api/KeycloakClaims.cs` (`Organization()`, `Groups()`,
   `IsInGroup()`, `Services()`, `HasServiceScope()`) — можно скопировать целиком.
-- `scope` — строка через пробел; доступ к сервису — *вхождение* имени (`HasServiceScope("cryptoservice")`),
+- `services` — строка через пробел (контракт v1.1); доступ к сервису — *вхождение* имени (`HasServiceScope("cryptoservice")`);
   не равенство строки. Групповые данные (паттерн «ресурс виден членам группы», фильтры в БД) — отдельная
   инструкция task-06 (`docs/integrations/group-data.md`, готовится) и `/group-data` в demo-api.
 
@@ -361,7 +361,7 @@ cd examples/demo-api && dotnet run --urls http://127.0.0.1:10010
 |---|---|
 | `curl http://127.0.0.1:10010/public` | **200**, json `{"status":"ok","service":"demo-api",…}` |
 | `curl http://127.0.0.1:10010/me` (без токена) | **401** |
-| `curl …/me -H "Authorization: Bearer $TOKEN"` (alice или bob) | **200** + клеймы контракта (organization, groups, roles, scope) |
+| `curl …/me -H "Authorization: Bearer $TOKEN"` (alice или bob) | **200** + клеймы контракта (organization, groups, roles, services) |
 | `…/admin` с токеном **alice** (admin) | **200** |
 | `…/admin` с токеном **bob** (user) | **403** |
 | `…/audit` с токеном **carol** (auditor) | **200**; с alice — **403** |

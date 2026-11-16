@@ -96,7 +96,7 @@ check() { # $1 = описание, $2 = результат (1/0 или true/fals
 }
 
 # 1. обязательный состав клеймов
-for c in iss sub exp iat jti typ azp aud email email_verified preferred_username organization groups realm_access scope; do
+for c in iss sub exp iat jti typ azp aud email email_verified preferred_username organization groups realm_access scope services; do
   check "клейм $c присутствует" "$(jqp "has(\"$c\")")"
 done
 
@@ -122,18 +122,20 @@ for r in ${E_ROLES[$USER_NAME]}; do
   check "realm_access.roles содержит $r" "$(jqp --arg r "$r" '.realm_access.roles | index($r) != null')"
 done
 
-# 6. scope: все сервисы пользователя присутствуют; сервисов вне availableServices нет
+# 6. claim services (контракт v1.1): все сервисы пользователя присутствуют; чужих нет;
+#    scope — только стандартные OIDC-значения (сервисов в нём быть не должно)
 for s in ${E_SERVICES[$USER_NAME]}; do
-  check "scope содержит $s" "$(jqp --arg s "$s" '.scope | split(" ") | index($s) != null')"
+  check "services содержит $s" "$(jqp --arg s "$s" '.services | split(" ") | index($s) != null')"
 done
-check "scope без сервисов вне availableServices" \
-  "$(jqp --arg all "$ALL_SERVICES" '[.scope | split(" ")[] | select(. as $s | ($all | split(" ")) | index($s))] | length > 0')"
-check "scope без посторонних значений сервис-типа" \
+check "services без посторонних значений" \
+  "$(python3 -c 'import json,sys
+svcs=set(json.loads(sys.argv[1])["services"].split())
+known=set(json.argv[2].split())
+sys.exit(0 if svcs<=known and svcs else 1)' "$payload" "$ALL_SERVICES" && echo 1 || echo 0)"
+check "scope без сервисов (v1.1)" \
   "$(python3 -c 'import json,sys
 scope=set(json.loads(sys.argv[1])["scope"].split())
-known=set(sys.argv[2].split())
-bad=scope-known-{"openid","email","profile"}
-sys.exit(0 if not bad else 1)' "$payload" "$ALL_SERVICES" && echo 1 || echo 0)"
+sys.exit(0 if not any(s.endswith("service") for s in scope) else 1)' "$payload" && echo 1 || echo 0)"
 
 # 7. подпись RS256 + kid
 check "заголовок: alg = RS256" "$([ "$(jqh .alg)" = RS256 ] && echo 1 || echo 0)"

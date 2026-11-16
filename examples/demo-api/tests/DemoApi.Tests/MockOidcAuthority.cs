@@ -59,7 +59,7 @@ public sealed class MockOidcAuthority : IDisposable
             new SigningCredentials(_key, SecurityAlgorithms.RsaSha256));
     }
 
-    /// <summary>Токен seeded-пользователя по контракту §4 (organization/groups/roles/scope).</summary>
+    /// <summary>Токен seeded-пользователя по контракту §4 (organization/groups/roles/services; v1.1).</summary>
     public string IssueUserToken(SeedUser user, TimeSpan? lifetime = null)
         => IssueToken(user.ToClaims(), lifetime: lifetime);
 
@@ -149,7 +149,8 @@ public sealed record SeedUser(
         {
             ["account"] = new { roles = new[] { "manage-account", "view-profile" } },
         },
-        ["scope"] = "openid email profile " + Services,
+        ["scope"] = "openid email profile",
+        ["services"] = Services,
     };
 
     // технические роли Keycloak — присутствуют всегда, потребители обязаны игнорировать (§3)

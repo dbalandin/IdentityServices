@@ -51,7 +51,7 @@ builder.Services
             : Uri.TryCreate(authority, UriKind.Absolute, out var u) && u.Scheme != "https" ? false : true;
         o.RequireHttpsMetadata = requireHttps;
 
-        o.MapInboundClaims = false;         // оригинальные имена клеймов: organization, groups, scope…
+        o.MapInboundClaims = false;         // оригинальные имена клеймов: organization, groups, services…
         o.TokenValidationParameters = new()
         {
             NameClaimType = "preferred_username", // username = email (контракт §3)

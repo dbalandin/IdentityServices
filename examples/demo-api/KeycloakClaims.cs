@@ -4,11 +4,11 @@ using System.Security.Claims;
 namespace DemoApi;
 
 /// <summary>
-/// Хелперы чтения клеймов Keycloak по контракту docs/contracts/jwt-claims.md (§3, §7):
-/// organization (строка), groups (массив строк), scope (строка сервисов через пробел).
+/// Хелперы чтения клеймов Keycloak по контракту docs/contracts/jwt-claims.md (§3, §7; v1.1):
+/// organization (строка), groups (массив строк), services (строка сервисов через пробел).
 /// </summary>
 /// <remarks>
-/// MapInboundClaims=false — имена клеймов приходят как в токене (organization, groups, scope…).
+/// MapInboundClaims=false — имена клеймов приходят как в токене (organization, groups, services…).
 /// ВНИМАНИЕ на формат groups: обработчик JsonWebTokens «разворачивает» JSON-массив примитивов
 /// в НЕСКОЛЬКО клеймов одного типа (по одному на группу), поэтому хелпер поддерживает оба вида:
 /// N клеймов-строк и один клейм со значением-JSON-массивом (старое поведение JwtSecurityTokenHandler).
@@ -17,6 +17,7 @@ public static class KeycloakClaims
 {
     public const string OrganizationClaim = "organization";
     public const string GroupsClaim = "groups";
+    public const string ServicesClaim = "services"; // контракт v1.1: отдельный клейм, НЕ scope
     public const string ScopeClaim = "scope";
     public const string RealmAccessClaim = "realm_access";
 
@@ -52,11 +53,11 @@ public static class KeycloakClaims
     public static bool IsInGroup(this ClaimsPrincipal user, string group)
         => user.Groups().Contains(group, StringComparer.Ordinal);
 
-    /// <summary>Список имён сервисов из клейма scope (split по пробелам; там же OIDC-значения openid/email/profile).</summary>
+    /// <summary>Список имён сервисов из клейма services (split по пробелам; контракт v1.1 — отдельный клейм, не scope).</summary>
     public static IReadOnlyList<string> Services(this ClaimsPrincipal user)
-        => user.FindFirst(ScopeClaim)?.Value.Split(' ', StringSplitOptions.RemoveEmptyEntries) ?? [];
+        => user.FindFirst(ServicesClaim)?.Value.Split(' ', StringSplitOptions.RemoveEmptyEntries) ?? [];
 
-    /// <summary>Доступ к сервису разрешён — имя сервиса входит в scope (контракт §3: вхождение, не равенство).</summary>
+    /// <summary>Доступ к сервису разрешён — имя сервиса входит в клейм services (контракт §3: вхождение, не равенство).</summary>
     public static bool HasServiceScope(this ClaimsPrincipal user, string service)
         => user.Services().Contains(service, StringComparer.Ordinal);
 

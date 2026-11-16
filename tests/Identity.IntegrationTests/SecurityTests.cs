@@ -18,16 +18,12 @@ public sealed class SecurityTests : IClassFixture<OidcClient>
 
     public SecurityTests(OidcClient oidc) => _oidc = oidc;
 
-    [LiveSecurityFact]
+    [LivePortalFact] // нужна и жертва через портал, и Keycloak — без портала тест skip'ается (LivePortalFact), а не падает
     public async Task Five_Bad_Passwords_Temporarily_Lock_Account()
     {
         // жертва — свежий пользователь (не портим seeded): создаём через портал, если он поднят;
         // иначе — bob (lockout временный, но тесты после него для bob сломаются — поэтому портал обязателен)
-        if (!TestEnv.IsReachable(TestEnv.PortalBase) || TestEnv.DemoPassword is null)
-        {
-            Assert.Fail("нужен портал (PORTAL_BASE_URL) для создания временного пользователя");
-            return;
-        }
+        Assert.NotNull(TestEnv.DemoPassword); // конфигурация прогона: без INIT_DEMO_PASSWORD suite бессмыслен
 
         var stamp = DateTime.UtcNow.ToString("yyyyMMddHHmmssfff");
         var email = $"lock-{stamp}@orga.example.com";
