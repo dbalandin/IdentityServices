@@ -1,0 +1,1444 @@
+{
+  "info": {
+    "name": "RuLink demo-api — контракт JWT (idp-test-appapi)",
+    "description": "Тесты **demo-api** (`examples/demo-api`) — resource-server realm `rulink`: приём JWT Keycloak, роли, групповой ресурс. Живой образец инструкций `docs/integrations/dotnet-oauth.md` и `group-data.md`; контракт клеймов — `docs/contracts/jwt-claims.md`.\n\n## Как пользоваться\n\n1. **Переменные** (коллекция → Edit → Variables): `api_url`, `idp_url` — серверы; `password` — пароль seeded-пользователей (`INIT_DEMO_PASSWORD` из `.env`; в коллекции не хранится).\n2. **Папка «1. Токен»** → выполните запрос токена. Скрипт коллекции сохранит `access_token`, запомнит пользователя (`active_user`) и выведет клеймы в Console.\n3. **Папка «2. demo-api»** → запросы к эндпоинтам (Bearer наследуется от папки). Access-токен живёт 5 минут — при 401 повторите шаг 2.\n4. **Всё сразу**, включая DoD-матрицу для 5 пользователей, — Run Collection или Newman:\n\n```bash\nnpx newman run demo-api.postman_collection.json --env-var password='<INIT_DEMO_PASSWORD>'\nnpx newman run demo-api.postman_collection.json --folder '2. demo-api — эндпоинты (с токеном)'   # только нужные папки\n```\n\n## Переменные\n\n| Переменная | Стенд srv-05 (по умолчанию) | Локально (compose) | Что |\n|---|---|---|---|\n| `api_url` | `https://idp-test2.rulink.io` | `http://127.0.0.1:10010` | demo-api, контейнер `idp-test-appapi` |\n| `idp_url` | `https://idp.rulink.io/realms/rulink` | `http://127.0.0.1:10020/realms/rulink` | realm Keycloak; token endpoint = `{{idp_url}}/protocol/openid-connect/token` |\n| `client_id` | `demo-api` | `demo-api` | public-клиент, direct access grants (dev/test) |\n| `username`, `password` | `bob@orga.example.com`, — | те же | пользователь запроса «Get token — текущий пользователь» |\n| `group_data_allowed` | `orga-team-a` | `orga-team-a` | группы-владельцы `/group-data` (`GroupData:AllowedGroups` демо-сервиса) |\n| `access_token`, `active_user`, `realm_roles`, `groups` | заполняются скриптом | | текущий токен и его клеймы |\n\nДля локального окружения удобно создать Environment с dev-значениями и выбрать его: переменные окружения имеют приоритет над переменными коллекции.\n\n## Что проверяется\n\nВсе проверки — в post-request скрипте **коллекции** (Scripts → Post-request), у запросов собственных скриптов нет:\n\n- токен: 200, `token_type`, клеймы контракта (`organization`, `groups`, `realm_access.roles`, `services`, `aud` содержит `client_id`);\n- `/me`: состав клеймов, контракт v1.1 (в `scope` нет сервисов), ответ совпадает с клеймами access_token;\n- `/admin`, `/audit`, `/group-data`: код ответа соответствует правам из токена (роль / членство в группе) — 200 или 403;\n- без токена и с мусорным токеном: 401 с `WWW-Authenticate: Bearer` (заголовок запроса `X-Expected-Status` задаёт ожидаемый код явно).\n\nИзменения состава клеймов или правил доступа — сначала в `docs/contracts/jwt-claims.md` и `examples/demo-api`, затем здесь.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Токен — Keycloak (password grant)",
+      "description": "Получение access_token по password grant: `POST {{idp_url}}/protocol/openid-connect/token` (у клиента `demo-api` включены direct access grants — dev/test).\n\nСкрипт коллекции сохраняет токен в `access_token` (его подставляют папки с запросами demo-api) и клеймы в `active_user`, `realm_roles`, `groups`; разбор токена — в Console (View → Show Postman Console).\nAccess-токен живёт **5 минут** — при 401 повторите запрос токена. Пароль seeded-пользователей общий: `INIT_DEMO_PASSWORD` (переменная `password`).",
+      "item": [
+        {
+          "name": "Get token — текущий пользователь ({{username}})",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "raw": "",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "password",
+                  "type": "text"
+                },
+                {
+                  "key": "client_id",
+                  "value": "{{client_id}}",
+                  "type": "text",
+                  "description": "public-клиент demo-api — secret не нужен (direct access grants включён для dev/test)"
+                },
+                {
+                  "key": "username",
+                  "value": "{{username}}",
+                  "type": "text"
+                },
+                {
+                  "key": "password",
+                  "value": "{{password}}",
+                  "type": "text",
+                  "description": "INIT_DEMO_PASSWORD — задайте в переменных коллекции; в файле не хранится"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{idp_url}}/protocol/openid-connect/token",
+              "host": [
+                "{{idp_url}}"
+              ],
+              "path": [
+                "protocol",
+                "openid-connect",
+                "token"
+              ]
+            },
+            "description": "Password grant для пользователя из переменной `{{username}}` (по умолчанию bob). Кому выдан токен — строка `[token] …` в Console."
+          },
+          "response": []
+        },
+        {
+          "name": "Seeded-пользователи контракта §4",
+          "description": "Пять демо-пользователей realm `rulink` (общий пароль — `INIT_DEMO_PASSWORD`). Для каждого запроса этой папки следующий запрос demo-api использует именно его токен.\n\n| пользователь | роли (кроме технических) | группы | /me | /admin | /audit | /group-data |\n|---|---|---|---|---|---|---|\n| alice | user, admin | orga-managers | 200 | 200 | 403 | 403 |\n| bob | user | orga-team-a | 200 | 403 | 403 | 200 |\n| carol | user, auditor | orga-team-a | 200 | 403 | 200 | 200 |\n| dave | user, admin | orgb-managers | 200 | 200 | 403 | 403 |\n| erin | user | orgb-team-b | 200 | 403 | 403 | 403 |",
+          "item": [
+            {
+              "name": "alice — роли user, admin; группа orga-managers",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/x-www-form-urlencoded",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "urlencoded",
+                  "raw": "",
+                  "urlencoded": [
+                    {
+                      "key": "grant_type",
+                      "value": "password",
+                      "type": "text"
+                    },
+                    {
+                      "key": "client_id",
+                      "value": "{{client_id}}",
+                      "type": "text",
+                      "description": "public-клиент demo-api — secret не нужен (direct access grants включён для dev/test)"
+                    },
+                    {
+                      "key": "username",
+                      "value": "alice@orga.example.com",
+                      "type": "text"
+                    },
+                    {
+                      "key": "password",
+                      "value": "{{password}}",
+                      "type": "text",
+                      "description": "INIT_DEMO_PASSWORD — задайте в переменных коллекции; в файле не хранится"
+                    }
+                  ]
+                },
+                "url": {
+                  "raw": "{{idp_url}}/protocol/openid-connect/token",
+                  "host": [
+                    "{{idp_url}}"
+                  ],
+                  "path": [
+                    "protocol",
+                    "openid-connect",
+                    "token"
+                  ]
+                },
+                "description": "Alice: администратор orga — роли user, admin; группа orga-managers. После этого запроса эндпоинты demo-api вызываются с токеном alice."
+              },
+              "response": []
+            },
+            {
+              "name": "bob — роль user; группа orga-team-a (владелец /group-data)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/x-www-form-urlencoded",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "urlencoded",
+                  "raw": "",
+                  "urlencoded": [
+                    {
+                      "key": "grant_type",
+                      "value": "password",
+                      "type": "text"
+                    },
+                    {
+                      "key": "client_id",
+                      "value": "{{client_id}}",
+                      "type": "text",
+                      "description": "public-клиент demo-api — secret не нужен (direct access grants включён для dev/test)"
+                    },
+                    {
+                      "key": "username",
+                      "value": "bob@orga.example.com",
+                      "type": "text"
+                    },
+                    {
+                      "key": "password",
+                      "value": "{{password}}",
+                      "type": "text",
+                      "description": "INIT_DEMO_PASSWORD — задайте в переменных коллекции; в файле не хранится"
+                    }
+                  ]
+                },
+                "url": {
+                  "raw": "{{idp_url}}/protocol/openid-connect/token",
+                  "host": [
+                    "{{idp_url}}"
+                  ],
+                  "path": [
+                    "protocol",
+                    "openid-connect",
+                    "token"
+                  ]
+                },
+                "description": "Bob: пользователь orga — роль user; группа orga-team-a (владелец /group-data). После этого запроса эндпоинты demo-api вызываются с токеном bob."
+              },
+              "response": []
+            },
+            {
+              "name": "carol — роли user, auditor; группа orga-team-a",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/x-www-form-urlencoded",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "urlencoded",
+                  "raw": "",
+                  "urlencoded": [
+                    {
+                      "key": "grant_type",
+                      "value": "password",
+                      "type": "text"
+                    },
+                    {
+                      "key": "client_id",
+                      "value": "{{client_id}}",
+                      "type": "text",
+                      "description": "public-клиент demo-api — secret не нужен (direct access grants включён для dev/test)"
+                    },
+                    {
+                      "key": "username",
+                      "value": "carol@orga.example.com",
+                      "type": "text"
+                    },
+                    {
+                      "key": "password",
+                      "value": "{{password}}",
+                      "type": "text",
+                      "description": "INIT_DEMO_PASSWORD — задайте в переменных коллекции; в файле не хранится"
+                    }
+                  ]
+                },
+                "url": {
+                  "raw": "{{idp_url}}/protocol/openid-connect/token",
+                  "host": [
+                    "{{idp_url}}"
+                  ],
+                  "path": [
+                    "protocol",
+                    "openid-connect",
+                    "token"
+                  ]
+                },
+                "description": "Carol: аудитор orga — роли user, auditor; группа orga-team-a. После этого запроса эндпоинты demo-api вызываются с токеном carol."
+              },
+              "response": []
+            },
+            {
+              "name": "dave — роли user, admin; группа orgb-managers",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/x-www-form-urlencoded",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "urlencoded",
+                  "raw": "",
+                  "urlencoded": [
+                    {
+                      "key": "grant_type",
+                      "value": "password",
+                      "type": "text"
+                    },
+                    {
+                      "key": "client_id",
+                      "value": "{{client_id}}",
+                      "type": "text",
+                      "description": "public-клиент demo-api — secret не нужен (direct access grants включён для dev/test)"
+                    },
+                    {
+                      "key": "username",
+                      "value": "dave@orgb.example.com",
+                      "type": "text"
+                    },
+                    {
+                      "key": "password",
+                      "value": "{{password}}",
+                      "type": "text",
+                      "description": "INIT_DEMO_PASSWORD — задайте в переменных коллекции; в файле не хранится"
+                    }
+                  ]
+                },
+                "url": {
+                  "raw": "{{idp_url}}/protocol/openid-connect/token",
+                  "host": [
+                    "{{idp_url}}"
+                  ],
+                  "path": [
+                    "protocol",
+                    "openid-connect",
+                    "token"
+                  ]
+                },
+                "description": "Dave: администратор orgb — роли user, admin; группа orgb-managers. После этого запроса эндпоинты demo-api вызываются с токеном dave."
+              },
+              "response": []
+            },
+            {
+              "name": "erin — роль user; группа orgb-team-b",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/x-www-form-urlencoded",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "urlencoded",
+                  "raw": "",
+                  "urlencoded": [
+                    {
+                      "key": "grant_type",
+                      "value": "password",
+                      "type": "text"
+                    },
+                    {
+                      "key": "client_id",
+                      "value": "{{client_id}}",
+                      "type": "text",
+                      "description": "public-клиент demo-api — secret не нужен (direct access grants включён для dev/test)"
+                    },
+                    {
+                      "key": "username",
+                      "value": "erin@orgb.example.com",
+                      "type": "text"
+                    },
+                    {
+                      "key": "password",
+                      "value": "{{password}}",
+                      "type": "text",
+                      "description": "INIT_DEMO_PASSWORD — задайте в переменных коллекции; в файле не хранится"
+                    }
+                  ]
+                },
+                "url": {
+                  "raw": "{{idp_url}}/protocol/openid-connect/token",
+                  "host": [
+                    "{{idp_url}}"
+                  ],
+                  "path": [
+                    "protocol",
+                    "openid-connect",
+                    "token"
+                  ]
+                },
+                "description": "Erin: пользователь orgb — роль user; группа orgb-team-b. После этого запроса эндпоинты demo-api вызываются с токеном erin."
+              },
+              "response": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2. demo-api — эндпоинты (с токеном)",
+      "description": "Запросы к `{{api_url}}`; Bearer-токен наследуется от папки (`{{access_token}}`), `/public` — анонимно.\n\nСкрипт коллекции предсказывает ожидаемый код по клеймам токена: `/admin` — роль `admin`, `/audit` — роль `auditor`, `/group-data` — членство в группе из `GroupData:AllowedGroups`; право отсутствует → 403. Таблица для seeded-пользователей — в папке 1.",
+      "auth": {
+        "type": "bearer",
+        "bearer": [
+          {
+            "key": "token",
+            "value": "{{access_token}}",
+            "type": "string"
+          }
+        ]
+      },
+      "item": [
+        {
+          "name": "/public — health/echo (анонимно)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{api_url}}/public",
+              "host": [
+                "{{api_url}}"
+              ],
+              "path": [
+                "public"
+              ]
+            },
+            "description": "Анонимный эндпоинт: `status`, `service`, `timeUtc`, `identityAuthority` — realm, чьи токены проверяет demo-api. Должен совпадать с переменной `idp_url`.",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "/me — клеймы текущего пользователя",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{api_url}}/me",
+              "host": [
+                "{{api_url}}"
+              ],
+              "path": [
+                "me"
+              ]
+            },
+            "description": "`[Authorize]`: клеймы access_token по контракту `docs/contracts/jwt-claims.md` — sub, preferredUsername, email, organization, groups, realmRoles, scope, services. Без токена — 401."
+          },
+          "response": []
+        },
+        {
+          "name": "/admin — только роль admin",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{api_url}}/admin",
+              "host": [
+                "{{api_url}}"
+              ],
+              "path": [
+                "admin"
+              ]
+            },
+            "description": "`[Authorize(Roles = \"admin\")]`: 200, если в `realm_access.roles` токена есть `admin`, иначе 403 (аутентифицирован, но без права)."
+          },
+          "response": []
+        },
+        {
+          "name": "/audit — только роль auditor",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{api_url}}/audit",
+              "host": [
+                "{{api_url}}"
+              ],
+              "path": [
+                "audit"
+              ]
+            },
+            "description": "`[Authorize(Roles = \"auditor\")]`: 200 при роли `auditor` в токене, иначе 403."
+          },
+          "response": []
+        },
+        {
+          "name": "/group-data — члены группы-владельца",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{api_url}}/group-data",
+              "host": [
+                "{{api_url}}"
+              ],
+              "path": [
+                "group-data"
+              ]
+            },
+            "description": "Групповой ресурс (P3): 200 членам групп из `GroupData:AllowedGroups` демо-сервиса (по умолчанию `orga-team-a`; переменная `group_data_allowed`), остальным — 403. Тело: `resourceGroups`, `yourGroups`, `organization`, `data`."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "3. Без токена / мусорный токен → 401",
+      "description": "demo-api работает в режиме `Jwt` библиотеки IdentityService: без токена — 401 с `WWW-Authenticate: Bearer`, без редиректа на логин (cookie/OIDC не регистрируются).\n\nУ этих запросов задан заголовок `X-Expected-Status: 401` — скрипт коллекции сверяет с ним код ответа.",
+      "item": [
+        {
+          "name": "/me без токена → 401",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Expected-Status",
+                "value": "401",
+                "type": "text",
+                "description": "Ожидаемый код ответа — сверяет скрипт коллекции"
+              }
+            ],
+            "url": {
+              "raw": "{{api_url}}/me",
+              "host": [
+                "{{api_url}}"
+              ],
+              "path": [
+                "me"
+              ]
+            },
+            "description": "Без заголовка Authorization: 401, `WWW-Authenticate: Bearer`.",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "/admin без токена → 401",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Expected-Status",
+                "value": "401",
+                "type": "text",
+                "description": "Ожидаемый код ответа — сверяет скрипт коллекции"
+              }
+            ],
+            "url": {
+              "raw": "{{api_url}}/admin",
+              "host": [
+                "{{api_url}}"
+              ],
+              "path": [
+                "admin"
+              ]
+            },
+            "description": "Защищённый эндпоинт без токена: 401 (не 302 на логин, не 403).",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "/me с мусорным токеном → 401",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Expected-Status",
+                "value": "401",
+                "type": "text",
+                "description": "Ожидаемый код ответа — сверяет скрипт коллекции"
+              }
+            ],
+            "url": {
+              "raw": "{{api_url}}/me",
+              "host": [
+                "{{api_url}}"
+              ],
+              "path": [
+                "me"
+              ]
+            },
+            "description": "`Authorization: Bearer not-a-jwt`: подпись/структура не проходит валидацию — 401.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "not-a-jwt",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "4. DoD-матрица — прогон целиком",
+      "description": "Для каждого seeded-пользователя: токен → `/me` → `/admin` → `/audit` → `/group-data`. Запускать сверху вниз (Run Collection или Newman): запросы используют токен последнего выполненного запроса токена, ожидаемые коды вычисляются по его клеймам.\n\n| пользователь | роли (кроме технических) | группы | /me | /admin | /audit | /group-data |\n|---|---|---|---|---|---|---|\n| alice | user, admin | orga-managers | 200 | 200 | 403 | 403 |\n| bob | user | orga-team-a | 200 | 403 | 403 | 200 |\n| carol | user, auditor | orga-team-a | 200 | 403 | 200 | 200 |\n| dave | user, admin | orgb-managers | 200 | 200 | 403 | 403 |\n| erin | user | orgb-team-b | 200 | 403 | 403 | 403 |",
+      "auth": {
+        "type": "bearer",
+        "bearer": [
+          {
+            "key": "token",
+            "value": "{{access_token}}",
+            "type": "string"
+          }
+        ]
+      },
+      "item": [
+        {
+          "name": "alice: токен",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "raw": "",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "password",
+                  "type": "text"
+                },
+                {
+                  "key": "client_id",
+                  "value": "{{client_id}}",
+                  "type": "text",
+                  "description": "public-клиент demo-api — secret не нужен (direct access grants включён для dev/test)"
+                },
+                {
+                  "key": "username",
+                  "value": "alice@orga.example.com",
+                  "type": "text"
+                },
+                {
+                  "key": "password",
+                  "value": "{{password}}",
+                  "type": "text",
+                  "description": "INIT_DEMO_PASSWORD — задайте в переменных коллекции; в файле не хранится"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{idp_url}}/protocol/openid-connect/token",
+              "host": [
+                "{{idp_url}}"
+              ],
+              "path": [
+                "protocol",
+                "openid-connect",
+                "token"
+              ]
+            },
+            "description": "Password grant: alice@orga.example.com. Скрипт сохранит токен и клеймы (администратор orga — роли user, admin; группа orga-managers).",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "alice: /me",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{api_url}}/me",
+              "host": [
+                "{{api_url}}"
+              ],
+              "path": [
+                "me"
+              ]
+            },
+            "description": "`[Authorize]`: клеймы access_token по контракту `docs/contracts/jwt-claims.md` — sub, preferredUsername, email, organization, groups, realmRoles, scope, services. Без токена — 401."
+          },
+          "response": []
+        },
+        {
+          "name": "alice: /admin",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{api_url}}/admin",
+              "host": [
+                "{{api_url}}"
+              ],
+              "path": [
+                "admin"
+              ]
+            },
+            "description": "`[Authorize(Roles = \"admin\")]`: 200, если в `realm_access.roles` токена есть `admin`, иначе 403 (аутентифицирован, но без права)."
+          },
+          "response": []
+        },
+        {
+          "name": "alice: /audit",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{api_url}}/audit",
+              "host": [
+                "{{api_url}}"
+              ],
+              "path": [
+                "audit"
+              ]
+            },
+            "description": "`[Authorize(Roles = \"auditor\")]`: 200 при роли `auditor` в токене, иначе 403."
+          },
+          "response": []
+        },
+        {
+          "name": "alice: /group-data",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{api_url}}/group-data",
+              "host": [
+                "{{api_url}}"
+              ],
+              "path": [
+                "group-data"
+              ]
+            },
+            "description": "Групповой ресурс (P3): 200 членам групп из `GroupData:AllowedGroups` демо-сервиса (по умолчанию `orga-team-a`; переменная `group_data_allowed`), остальным — 403. Тело: `resourceGroups`, `yourGroups`, `organization`, `data`."
+          },
+          "response": []
+        },
+        {
+          "name": "bob: токен",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "raw": "",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "password",
+                  "type": "text"
+                },
+                {
+                  "key": "client_id",
+                  "value": "{{client_id}}",
+                  "type": "text",
+                  "description": "public-клиент demo-api — secret не нужен (direct access grants включён для dev/test)"
+                },
+                {
+                  "key": "username",
+                  "value": "bob@orga.example.com",
+                  "type": "text"
+                },
+                {
+                  "key": "password",
+                  "value": "{{password}}",
+                  "type": "text",
+                  "description": "INIT_DEMO_PASSWORD — задайте в переменных коллекции; в файле не хранится"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{idp_url}}/protocol/openid-connect/token",
+              "host": [
+                "{{idp_url}}"
+              ],
+              "path": [
+                "protocol",
+                "openid-connect",
+                "token"
+              ]
+            },
+            "description": "Password grant: bob@orga.example.com. Скрипт сохранит токен и клеймы (пользователь orga — роль user; группа orga-team-a (владелец /group-data)).",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "bob: /me",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{api_url}}/me",
+              "host": [
+                "{{api_url}}"
+              ],
+              "path": [
+                "me"
+              ]
+            },
+            "description": "`[Authorize]`: клеймы access_token по контракту `docs/contracts/jwt-claims.md` — sub, preferredUsername, email, organization, groups, realmRoles, scope, services. Без токена — 401."
+          },
+          "response": []
+        },
+        {
+          "name": "bob: /admin",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{api_url}}/admin",
+              "host": [
+                "{{api_url}}"
+              ],
+              "path": [
+                "admin"
+              ]
+            },
+            "description": "`[Authorize(Roles = \"admin\")]`: 200, если в `realm_access.roles` токена есть `admin`, иначе 403 (аутентифицирован, но без права)."
+          },
+          "response": []
+        },
+        {
+          "name": "bob: /audit",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{api_url}}/audit",
+              "host": [
+                "{{api_url}}"
+              ],
+              "path": [
+                "audit"
+              ]
+            },
+            "description": "`[Authorize(Roles = \"auditor\")]`: 200 при роли `auditor` в токене, иначе 403."
+          },
+          "response": []
+        },
+        {
+          "name": "bob: /group-data",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{api_url}}/group-data",
+              "host": [
+                "{{api_url}}"
+              ],
+              "path": [
+                "group-data"
+              ]
+            },
+            "description": "Групповой ресурс (P3): 200 членам групп из `GroupData:AllowedGroups` демо-сервиса (по умолчанию `orga-team-a`; переменная `group_data_allowed`), остальным — 403. Тело: `resourceGroups`, `yourGroups`, `organization`, `data`."
+          },
+          "response": []
+        },
+        {
+          "name": "carol: токен",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "raw": "",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "password",
+                  "type": "text"
+                },
+                {
+                  "key": "client_id",
+                  "value": "{{client_id}}",
+                  "type": "text",
+                  "description": "public-клиент demo-api — secret не нужен (direct access grants включён для dev/test)"
+                },
+                {
+                  "key": "username",
+                  "value": "carol@orga.example.com",
+                  "type": "text"
+                },
+                {
+                  "key": "password",
+                  "value": "{{password}}",
+                  "type": "text",
+                  "description": "INIT_DEMO_PASSWORD — задайте в переменных коллекции; в файле не хранится"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{idp_url}}/protocol/openid-connect/token",
+              "host": [
+                "{{idp_url}}"
+              ],
+              "path": [
+                "protocol",
+                "openid-connect",
+                "token"
+              ]
+            },
+            "description": "Password grant: carol@orga.example.com. Скрипт сохранит токен и клеймы (аудитор orga — роли user, auditor; группа orga-team-a).",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "carol: /me",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{api_url}}/me",
+              "host": [
+                "{{api_url}}"
+              ],
+              "path": [
+                "me"
+              ]
+            },
+            "description": "`[Authorize]`: клеймы access_token по контракту `docs/contracts/jwt-claims.md` — sub, preferredUsername, email, organization, groups, realmRoles, scope, services. Без токена — 401."
+          },
+          "response": []
+        },
+        {
+          "name": "carol: /admin",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{api_url}}/admin",
+              "host": [
+                "{{api_url}}"
+              ],
+              "path": [
+                "admin"
+              ]
+            },
+            "description": "`[Authorize(Roles = \"admin\")]`: 200, если в `realm_access.roles` токена есть `admin`, иначе 403 (аутентифицирован, но без права)."
+          },
+          "response": []
+        },
+        {
+          "name": "carol: /audit",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{api_url}}/audit",
+              "host": [
+                "{{api_url}}"
+              ],
+              "path": [
+                "audit"
+              ]
+            },
+            "description": "`[Authorize(Roles = \"auditor\")]`: 200 при роли `auditor` в токене, иначе 403."
+          },
+          "response": []
+        },
+        {
+          "name": "carol: /group-data",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{api_url}}/group-data",
+              "host": [
+                "{{api_url}}"
+              ],
+              "path": [
+                "group-data"
+              ]
+            },
+            "description": "Групповой ресурс (P3): 200 членам групп из `GroupData:AllowedGroups` демо-сервиса (по умолчанию `orga-team-a`; переменная `group_data_allowed`), остальным — 403. Тело: `resourceGroups`, `yourGroups`, `organization`, `data`."
+          },
+          "response": []
+        },
+        {
+          "name": "dave: токен",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "raw": "",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "password",
+                  "type": "text"
+                },
+                {
+                  "key": "client_id",
+                  "value": "{{client_id}}",
+                  "type": "text",
+                  "description": "public-клиент demo-api — secret не нужен (direct access grants включён для dev/test)"
+                },
+                {
+                  "key": "username",
+                  "value": "dave@orgb.example.com",
+                  "type": "text"
+                },
+                {
+                  "key": "password",
+                  "value": "{{password}}",
+                  "type": "text",
+                  "description": "INIT_DEMO_PASSWORD — задайте в переменных коллекции; в файле не хранится"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{idp_url}}/protocol/openid-connect/token",
+              "host": [
+                "{{idp_url}}"
+              ],
+              "path": [
+                "protocol",
+                "openid-connect",
+                "token"
+              ]
+            },
+            "description": "Password grant: dave@orgb.example.com. Скрипт сохранит токен и клеймы (администратор orgb — роли user, admin; группа orgb-managers).",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "dave: /me",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{api_url}}/me",
+              "host": [
+                "{{api_url}}"
+              ],
+              "path": [
+                "me"
+              ]
+            },
+            "description": "`[Authorize]`: клеймы access_token по контракту `docs/contracts/jwt-claims.md` — sub, preferredUsername, email, organization, groups, realmRoles, scope, services. Без токена — 401."
+          },
+          "response": []
+        },
+        {
+          "name": "dave: /admin",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{api_url}}/admin",
+              "host": [
+                "{{api_url}}"
+              ],
+              "path": [
+                "admin"
+              ]
+            },
+            "description": "`[Authorize(Roles = \"admin\")]`: 200, если в `realm_access.roles` токена есть `admin`, иначе 403 (аутентифицирован, но без права)."
+          },
+          "response": []
+        },
+        {
+          "name": "dave: /audit",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{api_url}}/audit",
+              "host": [
+                "{{api_url}}"
+              ],
+              "path": [
+                "audit"
+              ]
+            },
+            "description": "`[Authorize(Roles = \"auditor\")]`: 200 при роли `auditor` в токене, иначе 403."
+          },
+          "response": []
+        },
+        {
+          "name": "dave: /group-data",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{api_url}}/group-data",
+              "host": [
+                "{{api_url}}"
+              ],
+              "path": [
+                "group-data"
+              ]
+            },
+            "description": "Групповой ресурс (P3): 200 членам групп из `GroupData:AllowedGroups` демо-сервиса (по умолчанию `orga-team-a`; переменная `group_data_allowed`), остальным — 403. Тело: `resourceGroups`, `yourGroups`, `organization`, `data`."
+          },
+          "response": []
+        },
+        {
+          "name": "erin: токен",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "raw": "",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "password",
+                  "type": "text"
+                },
+                {
+                  "key": "client_id",
+                  "value": "{{client_id}}",
+                  "type": "text",
+                  "description": "public-клиент demo-api — secret не нужен (direct access grants включён для dev/test)"
+                },
+                {
+                  "key": "username",
+                  "value": "erin@orgb.example.com",
+                  "type": "text"
+                },
+                {
+                  "key": "password",
+                  "value": "{{password}}",
+                  "type": "text",
+                  "description": "INIT_DEMO_PASSWORD — задайте в переменных коллекции; в файле не хранится"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{idp_url}}/protocol/openid-connect/token",
+              "host": [
+                "{{idp_url}}"
+              ],
+              "path": [
+                "protocol",
+                "openid-connect",
+                "token"
+              ]
+            },
+            "description": "Password grant: erin@orgb.example.com. Скрипт сохранит токен и клеймы (пользователь orgb — роль user; группа orgb-team-b).",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "erin: /me",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{api_url}}/me",
+              "host": [
+                "{{api_url}}"
+              ],
+              "path": [
+                "me"
+              ]
+            },
+            "description": "`[Authorize]`: клеймы access_token по контракту `docs/contracts/jwt-claims.md` — sub, preferredUsername, email, organization, groups, realmRoles, scope, services. Без токена — 401."
+          },
+          "response": []
+        },
+        {
+          "name": "erin: /admin",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{api_url}}/admin",
+              "host": [
+                "{{api_url}}"
+              ],
+              "path": [
+                "admin"
+              ]
+            },
+            "description": "`[Authorize(Roles = \"admin\")]`: 200, если в `realm_access.roles` токена есть `admin`, иначе 403 (аутентифицирован, но без права)."
+          },
+          "response": []
+        },
+        {
+          "name": "erin: /audit",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{api_url}}/audit",
+              "host": [
+                "{{api_url}}"
+              ],
+              "path": [
+                "audit"
+              ]
+            },
+            "description": "`[Authorize(Roles = \"auditor\")]`: 200 при роли `auditor` в токене, иначе 403."
+          },
+          "response": []
+        },
+        {
+          "name": "erin: /group-data",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{api_url}}/group-data",
+              "host": [
+                "{{api_url}}"
+              ],
+              "path": [
+                "group-data"
+              ]
+            },
+            "description": "Групповой ресурс (P3): 200 членам групп из `GroupData:AllowedGroups` демо-сервиса (по умолчанию `orga-team-a`; переменная `group_data_allowed`), остальным — 403. Тело: `resourceGroups`, `yourGroups`, `organization`, `data`."
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "event": [
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// ═══════════════════════════════════════════════════════════════════════════",
+          "// Post-request скрипт коллекции — выполняется после КАЖДОГО запроса.",
+          "// Все проверки собраны здесь (у запросов собственных скриптов нет):",
+          "//   1. Ответ Keycloak с access_token → токен и клеймы сохраняются в переменные",
+          "//      коллекции: access_token, active_user, realm_roles, groups.",
+          "//   2. Ответы demo-api сверяются с клеймами токена: право в токене ↔ 200, нет права ↔ 403",
+          "//      (это DoD-матрица examples/demo-api/README.md, но для любого пользователя realm).",
+          "//   3. Заголовок запроса X-Expected-Status задаёт ожидаемый код явно (папка «3. Без токена»).",
+          "// Контракт клеймов: docs/contracts/jwt-claims.md.",
+          "// ═══════════════════════════════════════════════════════════════════════════",
+          "",
+          "// Группы-владельцы /group-data — настройка demo-api (GroupData:AllowedGroups), по умолчанию orga-team-a",
+          "function allowedGroups() {",
+          "    return String(pm.variables.get('group_data_allowed') || 'orga-team-a').split(',').map(function (s) { return s.trim(); }).filter(Boolean);",
+          "}",
+          "",
+          "// Ожидаемые права — как в Program.cs demo-api: 200, если право есть в токене, иначе 403",
+          "const EXPECT = {",
+          "    '/admin':      { why: 'роль admin',   ok: function (roles) { return roles.indexOf('admin') !== -1; } },",
+          "    '/audit':      { why: 'роль auditor', ok: function (roles) { return roles.indexOf('auditor') !== -1; } },",
+          "    '/group-data': { why: 'членство в группе из GroupData:AllowedGroups', ok: function (roles, groups) {",
+          "        return groups.some(function (g) { return allowedGroups().indexOf(g) !== -1; });",
+          "    } }",
+          "};",
+          "",
+          "function safeJson(response) {",
+          "    try { return response.json(); } catch (e) { return null; }",
+          "}",
+          "",
+          "function base64Utf8(b64) {",
+          "    b64 = String(b64).replace(/-/g, '+').replace(/_/g, '/');",
+          "    if (typeof Buffer !== 'undefined') { return Buffer.from(b64, 'base64').toString('utf8'); }",
+          "    b64 += '='.repeat((4 - b64.length % 4) % 4);",
+          "    const bin = atob(b64);",
+          "    let pct = '';",
+          "    for (let i = 0; i < bin.length; i++) { pct += '%' + ('00' + bin.charCodeAt(i).toString(16)).slice(-2); }",
+          "    return decodeURIComponent(pct);",
+          "}",
+          "",
+          "// JWT = header.payload.signature. Подпись здесь не проверяется — это делает demo-api; читаем только клеймы",
+          "function jwtPayload(token) {",
+          "    return JSON.parse(base64Utf8(String(token).split('.')[1]));",
+          "}",
+          "",
+          "function splitList(value) {",
+          "    return String(value || '').split(' ').filter(Boolean);",
+          "}",
+          "",
+          "const body = safeJson(pm.response);",
+          "const path = pm.request.url.getPath();",
+          "const isTokenRequest = path.indexOf('/openid-connect/token') !== -1;",
+          "",
+          "// ── 1. Токен (Keycloak, password grant) ──────────────────────────────────────",
+          "if (isTokenRequest) {",
+          "    if (pm.response.code !== 200 || !body || !body.access_token) {",
+          "        pm.test('Keycloak выдал токен: 200 и access_token', function () {",
+          "            throw new Error('Получено HTTP ' + pm.response.code + '. Проверьте password (INIT_DEMO_PASSWORD), username, client_id и idp_url. Ответ: ' + pm.response.text().slice(0, 300));",
+          "        });",
+          "    } else {",
+          "        pm.test('Keycloak выдал токен: token_type = Bearer', function () {",
+          "            pm.expect(body.token_type, 'token_type').to.eql('Bearer');",
+          "            pm.expect(body.expires_in, 'expires_in, с').to.be.above(0);",
+          "        });",
+          "        // Bearer-авторизация папок с запросами demo-api подставляет именно эту переменную",
+          "        pm.collectionVariables.set('access_token', body.access_token);",
+          "        const claims = jwtPayload(body.access_token);",
+          "        // Клеймы → переменные: по ним же предсказывается ответ demo-api (200/403)",
+          "        const roles = (claims.realm_access && claims.realm_access.roles) || [];",
+          "        const groups = Array.isArray(claims.groups) ? claims.groups : [];",
+          "        pm.collectionVariables.set('active_user', String(claims.preferred_username || '').split('@')[0]);",
+          "        pm.collectionVariables.set('realm_roles', roles.join(' '));",
+          "        pm.collectionVariables.set('groups', groups.join(' '));",
+          "        pm.test('Клеймы access_token по контракту jwt-claims.md', function () {",
+          "            pm.expect(claims, 'organization — строка-alias').to.have.property('organization').that.is.a('string').and.not.empty;",
+          "            pm.expect(claims, 'groups — массив').to.have.property('groups').that.is.an('array');",
+          "            pm.expect(claims, 'realm_access.roles — массив').to.have.nested.property('realm_access.roles').that.is.an('array');",
+          "            pm.expect(claims, 'services — строка сервисов через пробел').to.have.property('services').that.is.a('string');",
+          "            const aud = Array.isArray(claims.aud) ? claims.aud : [claims.aud];",
+          "            pm.expect(aud, 'aud содержит client_id (audience mapper клиента)').to.include(pm.variables.get('client_id'));",
+          "        });",
+          "        console.log('[token] ' + String(claims.preferred_username || '').split('@')[0] + ': ' + body.expires_in + ' s; organization=' + claims.organization +",
+          "            '; groups=' + JSON.stringify(groups) + '; roles=' + JSON.stringify(roles) + '; services=' + claims.services);",
+          "    }",
+          "}",
+          "",
+          "// ── 2. demo-api ──────────────────────────────────────────────────────────────",
+          "if (!isTokenRequest) {",
+          "    const user = pm.collectionVariables.get('active_user');",
+          "    const roles = splitList(pm.collectionVariables.get('realm_roles'));",
+          "    const groups = splitList(pm.collectionVariables.get('groups'));",
+          "    const explicit = pm.request.headers.get('X-Expected-Status');",
+          "",
+          "    // Явное ожидание (папка «3. Без токена»): сверяем только код ответа",
+          "    if (explicit) {",
+          "        pm.test('Ожидаемый код ответа: ' + explicit, function () { pm.response.to.have.status(Number(explicit)); });",
+          "    }",
+          "",
+          "    if (pm.response.code === 401) {",
+          "        // Режим Jwt библиотеки IdentityService: 401 с вызовом Bearer, без редиректа на логин Keycloak",
+          "        pm.test('401: WWW-Authenticate: Bearer, без редиректа на логин', function () {",
+          "            pm.expect(String(pm.response.headers.get('WWW-Authenticate')), 'WWW-Authenticate').to.match(/^Bearer/);",
+          "        });",
+          "        if (!explicit) {",
+          "            pm.test('Есть действующий токен', function () {",
+          "                throw new Error('401 — переменная access_token пуста или токен истёк (access-токен живёт 5 минут). Выполните запрос из папки «1. Токен».');",
+          "            });",
+          "        }",
+          "    } else if (path === '/public') {",
+          "        pm.test('/public: health/echo без аутентификации', function () {",
+          "            pm.response.to.have.status(200);",
+          "            pm.expect(body, 'тело — JSON').to.be.an('object');",
+          "            pm.expect(body.status, 'status').to.eql('ok');",
+          "            pm.expect(body.service, 'service').to.eql('demo-api');",
+          "            pm.expect(body.identityAuthority, 'identityAuthority').to.be.a('string').and.not.empty;",
+          "            console.log('demo-api проверяет токены realm: ' + body.identityAuthority +",
+          "                ' (токены получаем от ' + pm.variables.get('idp_url') + ') — адреса должны совпадать');",
+          "        });",
+          "    } else if (path === '/me') {",
+          "        pm.test('/me: клеймы пользователя по контракту jwt-claims.md', function () {",
+          "            pm.response.to.have.status(200);",
+          "            pm.expect(body.preferredUsername, 'preferred_username = email').to.be.a('string').and.not.empty;",
+          "            pm.expect(body.organization, 'organization — строка-alias').to.be.a('string').and.not.empty;",
+          "            pm.expect(body.groups, 'groups — массив').to.be.an('array');",
+          "            pm.expect(body.realmRoles, 'realmRoles — массив').to.be.an('array');",
+          "            pm.expect(body.services, 'services — массив').to.be.an('array');",
+          "        });",
+          "        // Контракт v1.1: сервисы — отдельный клейм services; scope — только OIDC-значения",
+          "        pm.test('/me: в scope нет сервисов (контракт v1.1)', function () {",
+          "            const scope = splitList(body.scope);",
+          "            pm.expect(scope, 'scope').to.include('openid');",
+          "            pm.expect(scope.filter(function (s) { return s.slice(-7) === 'service'; }), 'в scope нет *service').to.eql([]);",
+          "        });",
+          "        // /me показывает ровно то, что подписано в access_token",
+          "        pm.test('/me: ответ совпадает с клеймами access_token', function () {",
+          "            let claims = null;",
+          "            try { claims = jwtPayload(pm.collectionVariables.get('access_token')); } catch (e) { claims = null; }",
+          "            pm.expect(claims, 'access_token — JWT').to.be.an('object');",
+          "            pm.expect(body.preferredUsername).to.eql(claims.preferred_username);",
+          "            pm.expect(body.organization).to.eql(claims.organization);",
+          "            pm.expect(body.groups).to.eql(claims.groups);",
+          "            pm.expect(body.realmRoles).to.eql((claims.realm_access && claims.realm_access.roles) || []);",
+          "            pm.expect(body.services).to.eql(splitList(claims.services));",
+          "        });",
+          "    } else if (EXPECT[path]) {",
+          "        const rule = EXPECT[path];",
+          "        const allowed = rule.ok(roles, groups);",
+          "        pm.test(path + ' как ' + (user || '?') + ' → ' + (allowed ? '200' : '403') + ' (' + rule.why + ')', function () {",
+          "            pm.response.to.have.status(allowed ? 200 : 403);",
+          "        });",
+          "        if (allowed && path === '/group-data') {",
+          "            pm.test('/group-data: пересечение групп пользователя с группами ресурса + данные', function () {",
+          "                const visible = groups.filter(function (g) { return allowedGroups().indexOf(g) !== -1; });",
+          "                pm.expect(body.resourceGroups, 'resourceGroups').to.eql(visible);",
+          "                pm.expect(body.yourGroups, 'yourGroups').to.eql(groups);",
+          "                pm.expect(body.data, 'data').to.be.an('array').and.not.empty;",
+          "            });",
+          "        }",
+          "    }",
+          "}",
+          ""
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "api_url",
+      "value": "https://idp-test2.rulink.io",
+      "type": "string",
+      "description": "demo-api: стенд srv-05 (контейнер idp-test-appapi, https://idp-test2.rulink.io); локально — http://127.0.0.1:10010"
+    },
+    {
+      "key": "idp_url",
+      "value": "https://idp.rulink.io/realms/rulink",
+      "type": "string",
+      "description": "Realm Keycloak (issuer токенов); локально — http://127.0.0.1:10020/realms/rulink"
+    },
+    {
+      "key": "client_id",
+      "value": "demo-api",
+      "type": "string",
+      "description": "Клиент Keycloak, которому выдаётся токен (public, direct access grants)"
+    },
+    {
+      "key": "username",
+      "value": "bob@orga.example.com",
+      "type": "string",
+      "description": "Пользователь запроса «Get token — текущий пользователь»"
+    },
+    {
+      "key": "password",
+      "value": "",
+      "type": "secret",
+      "description": "Пароль seeded-пользователей (INIT_DEMO_PASSWORD из .env) — задайте здесь, в файле не хранится"
+    },
+    {
+      "key": "group_data_allowed",
+      "value": "orga-team-a",
+      "type": "string",
+      "description": "Группы-владельцы /group-data (через запятую) — как в настройке demo-api GroupData:AllowedGroups"
+    },
+    {
+      "key": "access_token",
+      "value": "",
+      "type": "secret",
+      "description": "Заполняется скриптом коллекции после запроса токена; подставляется в Authorization: Bearer"
+    },
+    {
+      "key": "active_user",
+      "value": "",
+      "type": "string",
+      "description": "Заполняется скриптом: локальная часть preferred_username (bob@… → bob)"
+    },
+    {
+      "key": "realm_roles",
+      "value": "",
+      "type": "string",
+      "description": "Заполняется скриптом: realm_access.roles токена через пробел"
+    },
+    {
+      "key": "groups",
+      "value": "",
+      "type": "string",
+      "description": "Заполняется скриптом: группы из токена через пробел"
+    }
+  ]
+}

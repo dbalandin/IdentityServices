@@ -50,3 +50,6 @@ sudo /opt/services/z-config/update-compose.sh    # перезапустить co
 curl https://idp-test2.rulink.io/public           # 200, анонимный health/echo
 curl https://idp-test2.rulink.io/me               # 401 без токена
 ```
+
+Полный набор проверок (токен + все эндпоинты + DoD-матрица для 5 пользователей) — Postman-коллекция
+`examples/postman/demo-api.postman_collection.json`: переменные `api_url`/`idp_url` по умолчанию указывают на этот стенд.

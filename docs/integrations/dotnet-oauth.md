@@ -378,6 +378,9 @@ cd examples/demo-api && dotnet run --urls http://127.0.0.1:10010
 dotnet test examples/demo-api/tests/DemoApi.Tests   # сценарии таблицы выше, RS256 + клеймы контракта
 ```
 
+Те же вызовы из таблицы — готовой Postman-коллекцией `examples/postman/demo-api.postman_collection.json`
+(получение токена + эндпоинты, серверы заданы переменными; 39 запросов с проверками ответов).
+
 ---
 
 ## 8. Типовые проблемы

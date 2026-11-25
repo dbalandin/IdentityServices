@@ -67,6 +67,25 @@ curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:10010/group-data   # 200
 # токеном carol → /audit 200; токеном dave (orgb) → /group-data 403
 ```
 
+## Postman-коллекция
+
+`examples/postman/demo-api.postman_collection.json` — запросы токена (Keycloak, password grant) и всех
+эндпоинтов demo-api. Серверы заданы переменными: `{{api_url}}` (demo-api) и `{{idp_url}}` (realm Keycloak);
+по умолчанию — стенд srv-05 (`https://idp-test2.rulink.io`, `https://idp.rulink.io/realms/rulink`), для
+локального окружения — `http://127.0.0.1:10010` и `http://127.0.0.1:10020/realms/rulink`.
+
+1. Импортируйте коллекцию, в переменных задайте `password` (`INIT_DEMO_PASSWORD`; в файле не хранится).
+2. Папка «1. Токен» → запрос токена: он сохраняется в `access_token`, разбор клеймов — в Console.
+3. Папка «2. demo-api» → эндпоинты (Bearer наследуется от папки). Проверки собраны в post-request
+   скрипте коллекции: ответ сверяется с клеймами токена (роль / членство в группе ↔ 200 / 403),
+   заголовок `X-Expected-Status` задаёт ожидаемый код явно для запросов без токена.
+4. Папка «4. DoD-матрица» — все пять seeded-пользователей подряд (Run Collection / Newman).
+
+```bash
+npx newman run examples/postman/demo-api.postman_collection.json --env-var password="$INIT_DEMO_PASSWORD"   # 39 запросов
+npx newman run examples/postman/demo-api.postman_collection.json --folder '2. demo-api — эндпоинты (с токеном)'   # нужные папки
+```
+
 ## Тесты (без Keycloak — мок OIDC authority)
 
 `tests/DemoApi.Tests`: мок realm'а (discovery + JWKS + RS256-токены seeded-пользователей
