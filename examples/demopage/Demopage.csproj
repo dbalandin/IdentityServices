@@ -8,14 +8,19 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- OIDC authorization code flow (+PKCE) против Keycloak realm rulink -->
-    <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="10.0.1" />
+    <!-- тесты — отдельный проект ниже по дереву; исключаем из web-приложения (и из Content/None:
+         иначе web-SDK собирает tests/**/bin/**/*.json как контент и Mvc.Testing копирует их рекурсивно) -->
+    <Compile Remove="tests/**" />
+    <Content Remove="tests/**" />
+    <None Remove="tests/**" />
   </ItemGroup>
 
   <ItemGroup>
-    <!-- единый источник хелперов/трансформера клеймов — из examples/demo-api (контракт jwt-claims.md §7) -->
-    <Compile Include="../demo-api/KeycloakClaims.cs" Link="Shared/KeycloakClaims.cs" />
-    <Compile Include="../demo-api/RealmRolesTransformer.cs" Link="Shared/RealmRolesTransformer.cs" />
+    <!-- Аутентификация — библиотека IdentityService: OIDC-логин через Keycloak (cookie + authorization
+         code + PKCE), realm-роли и хелперы клеймов. NuGet-пакета пока нет — ProjectReference на соседний
+         каталог (тот же путь, что в examples/example.slnx). Для docker-сборки библиотека подключается
+         именованным контекстом — см. Dockerfile -->
+    <ProjectReference Include="..\..\..\IdentityService\IdentityService\IdentityService.csproj" />
   </ItemGroup>
 
 </Project>

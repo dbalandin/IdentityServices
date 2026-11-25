@@ -1,0 +1,15 @@
+# ============================================================
+# idp-test-appweb (demopage) — переменные docker-compose
+# (docker compose rulink-compose читает их из .env стенда)
+# Секретов нет: OIDC-клиент demo-api — public (standard flow + PKCE).
+# Скопировать в .env: cp envexample .env
+# ============================================================
+
+# issuer realm rulink (публичный URL Keycloak стенда srv-05)
+IDPTESTAPPWEB_IDENTITY_AUTHORITY=https://idp.rulink.io/realms/rulink
+
+# OIDC-клиент realm rulink (public, PKCE; redirect URI сайта
+# https://idp-test.rulink.io/* должен входить в redirectUris клиента —
+# задаётся в DEMO_API_REDIRECT_URIS keycloak-rulink и применяется
+# идемпотентным init/realm-bootstrap.sh)
+IDPTESTAPPWEB_IDENTITY_CLIENTID=demo-api

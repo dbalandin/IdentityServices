@@ -10,13 +10,19 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- тесты — отдельный проект ниже по дереву; исключаем из web-приложения -->
+    <!-- тесты — отдельный проект ниже по дереву; исключаем из web-приложения (и из Content/None:
+         иначе web-SDK собирает tests/**/bin/**/*.json как контент и Mvc.Testing копирует их рекурсивно) -->
     <Compile Remove="tests/**" />
+    <Content Remove="tests/**" />
+    <None Remove="tests/**" />
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Валидация JWT Keycloak по JWKS realm'а (docs/contracts/jwt-claims.md §7) -->
-    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.1" />
+    <!-- Аутентификация Keycloak (JWT Bearer, realm-роли, хелперы клеймов) — библиотека IdentityService:
+        docs/contracts/jwt-claims.md §7 реализованы в ней. NuGet-пакета пока нет — ProjectReference на соседний
+         каталог (тот же путь, что в examples/example.slnx). Для docker-сборки библиотека подключается
+         именованным контекстом — см. Dockerfile -->
+    <ProjectReference Include="..\..\..\IdentityService\IdentityService\IdentityService.csproj" />
   </ItemGroup>
 
 </Project>

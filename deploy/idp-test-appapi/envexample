@@ -1,0 +1,9 @@
+# ============================================================
+# idp-test-appapi (demo-api) — переменные docker-compose
+# (docker compose rulink-compose читает их из .env стенда)
+# Секретов нет: это resource-server (только валидация JWT по JWKS).
+# Скопировать в .env: cp envexample .env
+# ============================================================
+
+# issuer realm rulink (публичный URL Keycloak стенда srv-05)
+IDPTESTAPPAPI_IDENTITY_AUTHORITY=https://idp.rulink.io/realms/rulink

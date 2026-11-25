@@ -8,9 +8,11 @@ using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 namespace DemoApi.Tests;
 
 /// <summary>
-/// demo-api в TestServer'e. JwtBearer получает ConfigurationManager с HttpClient'ом,
+/// demo-api в TestServer'e. Аутентификация — библиотека IdentityService (Mode = Jwt из appsettings.json):
+/// зарегистрированная ею JwtBearer-схема "Bearer" получает ConfigurationManager с HttpClient'ом,
 /// перенаправленным на мок OIDC-authority (discovery + JWKS отдаются in-memory,
 /// подпись RS256 — валидация честная, включая подбор ключа по kid).
+/// Authority подменяется UseSetting: библиотека читает секцию Identity при старте.
 /// </summary>
 public sealed class DemoApiFactory : WebApplicationFactory<Program>
 {

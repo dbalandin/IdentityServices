@@ -5,6 +5,16 @@ Deploy scripts for Keycloak-rulink
 11-keycloak-rulink_image.sh - скачать образ. Работаем с версией не ниже 26.1 (нам нужны org)
 12-keycloak-rulink_deploy.sh - копируем все каталоги
 
+## Тестовые приложения (task-11)
+
+Там же на стенде srv-05 опубликованы тестовые приложения:
+- `deploy/idp-test-appweb/` — demopage (examples/demopage): https://idp-test.rulink.io (:11001)
+- `deploy/idp-test-appapi/` — demo-api (examples/demo-api): https://idp-test2.rulink.io (:11002)
+
+Сборка/деплой — см. README внутри каждой папки. Зависимость: в redirectUris клиента
+`demo-api` realm rulink должен входить `https://idp-test.rulink.io/*`
+(переменная `DEMO_API_REDIRECT_URIS` + перезапуск init/realm-bootstrap.sh).
+
 ## При первом запуске
 Заполняем `envaroments` - заполнить поля 
 ```

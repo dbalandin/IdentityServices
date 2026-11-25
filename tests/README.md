@@ -46,5 +46,6 @@ dotnet test tests/Identity.IntegrationTests
 - `SecurityTests.Five_Bad_Passwords…` создаёт временного пользователя через портал и блокирует его —
   seeded-пользователи не страдают; временные пользователи (`it-*`, `lock-*`) удаляются/остаются
   заблокированными — безвредно для повторных прогонов (email с таймстампом).
-- Юнит/интеграционные тесты без живого окружения: `examples/demo-api/tests/DemoApi.Tests` (28) и
-  `src/portal/tests/Portal.Tests` (20) — мок-authority/мок Admin REST.
+- Юнит/интеграционные тесты без живого окружения: `examples/demo-api/tests/DemoApi.Tests` (21),
+  `examples/demopage/tests/Demopage.Tests` (15) и `src/portal/tests/Portal.Tests` (20) —
+  мок-authority/мок IdP + мок demo-api/мок Admin REST.

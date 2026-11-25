@@ -153,6 +153,8 @@ fi
 # ВАЖНО (контракт v1.1): клейм НЕ "scope" — в KC 26 штатная генерация scope-строки
 # затирает протокольный маппер с claim.name=scope (эмпирически на 26.7.5);
 # сервисы — отдельным строковым клеймом services через пробел.
+# id.token.claim=true: клейм нужен и в ID-токене — OIDC-клиенты (UI-сервисы) строят
+# ClaimsPrincipal из ID-токена, а не из access token.
 services_scope=$(get_scope_id services)
 if [ -z "$services_scope" ]; then
   kc create client-scopes -r "$REALM" -s name=services -s protocol=openid-connect \
@@ -161,7 +163,7 @@ if [ -z "$services_scope" ]; then
   log "создан client scope services"
 fi
 svc_mapper=$(kc get "client-scopes/$services_scope/protocol-mappers/models" -r "$REALM" --fields id,name --format csv --noquotes 2>/dev/null | id_by_field "services" 2 | id_first)
-SVC_MAPPER_CONFIG='{"user.attribute":"services","claim.name":"services","jsonType.label":"String","multivalued":"false","aggregate.attrs":"false","access.token.claim":"true","id.token.claim":"false","userinfo.token.claim":"false","introspection.token.claim":"true"}'
+SVC_MAPPER_CONFIG='{"user.attribute":"services","claim.name":"services","jsonType.label":"String","multivalued":"false","aggregate.attrs":"false","access.token.claim":"true","id.token.claim":"true","userinfo.token.claim":"false","introspection.token.claim":"true"}'
 if [ -z "$svc_mapper" ]; then
   kc create "client-scopes/$services_scope/protocol-mappers/models" -r "$REALM" \
     -s name=services -s protocol=openid-connect -s protocolMapper=oidc-usermodel-attribute-mapper \
@@ -171,7 +173,7 @@ else
   kc update "client-scopes/$services_scope/protocol-mappers/models/$svc_mapper" -r "$REALM" \
     -s name=services -s protocol=openid-connect -s protocolMapper=oidc-usermodel-attribute-mapper \
     -s "config=$SVC_MAPPER_CONFIG"
-  log "mapper services приведён к контракту v1.1 (claim.name=services)"
+  log "mapper services приведён к контракту v1.1+ (claim.name=services, id.token.claim=true)"
 fi
 
 # встроенный scope `organization`: приводим Organization Membership mapper к multivalued=false,
@@ -185,8 +187,9 @@ if [ -z "$org_scope" ]; then
 fi
 org_mapper=$(kc get "client-scopes/$org_scope/protocol-mappers/models" -r "$REALM" --fields id,protocolMapper --format csv --noquotes 2>/dev/null | id_by_field "oidc-organization-membership-mapper" 2 | id_first)
 # важные флаги: access.token.claim=true (без него клейм не попадает в access token —
-# дефолт false), introspection.token.claim=true; multivalued=false — claim = alias строкой
-ORG_MAPPER_CONFIG='{"claim.name":"organization","multivalued":"false","jsonType.label":"String","access.token.claim":"true","id.token.claim":"false","userinfo.token.claim":"false","introspection.token.claim":"true","addOrganizationAttributes":"false","addOrganizationId":"false"}'
+# дефолт false), introspection.token.claim=true; multivalued=false — claim = alias строкой;
+# id.token.claim=true — для OIDC-клиентов (UI-сервисы строят principal из ID-токена)
+ORG_MAPPER_CONFIG='{"claim.name":"organization","multivalued":"false","jsonType.label":"String","access.token.claim":"true","id.token.claim":"true","userinfo.token.claim":"false","introspection.token.claim":"true","addOrganizationAttributes":"false","addOrganizationId":"false"}'
 if [ -z "$org_mapper" ]; then
   kc create "client-scopes/$org_scope/protocol-mappers/models" -r "$REALM" \
     -s name=organization -s protocol=openid-connect -s protocolMapper=oidc-organization-membership-mapper \
@@ -196,7 +199,22 @@ else
   kc update "client-scopes/$org_scope/protocol-mappers/models/$org_mapper" -r "$REALM" \
     -s name=organization -s protocol=openid-connect -s protocolMapper=oidc-organization-membership-mapper \
     -s "config=$ORG_MAPPER_CONFIG"
-  log "Organization Membership mapper приведён к multivalued=false + access.token.claim (claim organization = alias строкой)"
+  log "Organization Membership mapper приведён к multivalued=false + access.token.claim + id.token.claim (claim organization = alias строкой)"
+fi
+
+# realm-роли -> ID-токен. Дефолт Keycloak: mapper `realm roles` (встроенный scope roles)
+# кладёт realm_access.roles ТОЛЬКО в access token. Браузерные (OIDC) клиенты строят principal
+# из ID-токена, поэтому в UI не работают [Authorize(Roles=…)] и IsInRole. Ищем по protocolMapper
+# (имя маппера может быть локализовано), обновляем только config.
+roles_scope=$(get_scope_id roles)
+roles_mapper=$(kc get "client-scopes/$roles_scope/protocol-mappers/models" -r "$REALM" --fields id,protocolMapper --format csv --noquotes 2>/dev/null | id_by_field "oidc-usermodel-realm-role-mapper" 2 | id_first)
+REALM_ROLES_MAPPER_CONFIG='{"claim.name":"realm_access.roles","jsonType.label":"String","multivalued":"true","access.token.claim":"true","id.token.claim":"true","userinfo.token.claim":"false"}'
+if [ -z "$roles_mapper" ]; then
+  log "ПРЕДУПРЕЖДЕНИЕ: mapper realm roles (oidc-usermodel-realm-role-mapper) не найден в scope roles — realm-роли не попадут в ID-токен"
+else
+  kc update "client-scopes/$roles_scope/protocol-mappers/models/$roles_mapper" -r "$REALM" \
+    -s "config=$REALM_ROLES_MAPPER_CONFIG"
+  log "mapper realm roles приведён к id.token.claim=true (realm_access.roles в ID-токене)"
 fi
 
 # группы и services — дефолтные scope всего realm; organization — дефолт для клиентов

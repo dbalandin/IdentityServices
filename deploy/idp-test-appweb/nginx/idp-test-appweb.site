@@ -1,0 +1,31 @@
+server {
+        listen 443 ssl;
+        server_name idp-test.rulink.io;
+
+        include snippets/ssl.conf;
+        include snippets/https.common.conf;
+        include /etc/nginx/mime.types;
+
+        default_type text/html;
+        root /opt/services/idp-test-appweb/;
+
+        location / {
+                proxy_pass http://localhost:11001;
+                include snippets/httpsite.conf;
+                include snippets/headers.conf;
+
+                # OIDC-логин: ответ /signin-oidc несёт большие Set-Cookie с токенами
+                proxy_buffer_size 32k;
+                proxy_buffers 8 32k;
+                proxy_busy_buffers_size 64k;
+
+                proxy_read_timeout 3600s;
+                proxy_send_timeout 3600s;
+        }
+}
+
+server {
+        listen 80;
+        server_name idp-test.rulink.io;
+        return 301 https://$server_name$request_uri;
+}

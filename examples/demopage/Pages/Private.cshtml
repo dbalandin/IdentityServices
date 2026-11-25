@@ -4,7 +4,7 @@
 @attribute [Authorize]
 
 <h1>Защищённая страница ([Authorize])</h1>
-<p>Вход выполнен через IdentityService. Клеймы текущего пользователя (контракт <code>docs/contracts/jwt-claims.md</code>):</p>
+<p>Вход выполнен через Keycloak (OIDC, режим Cookie библиотеки IdentityService). Клеймы текущего пользователя (контракт <code>docs/contracts/jwt-claims.md</code>):</p>
 
 <table>
     <tr><th>Claim</th><th>Значение</th></tr>
@@ -18,7 +18,7 @@
 </table>
 
 <h2>Вызов demo-api с access token</h2>
-<p>Тот же access token, что и для входа (SaveTokens=true), передаётся в <code>demo-api /me</code>:</p>
+<p>Access token сохранён в cookie-сессии библиотекой (<code>SaveTokens=true</code>) и передаётся в <code>demo-api /me</code>:</p>
 @if (Model.ApiError is null)
 {
     <pre class="ok">@Model.ApiResult</pre>

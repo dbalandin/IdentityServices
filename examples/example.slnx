@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="../../IdentityService/IdentityService/IdentityService.csproj" />
+  <Project Path="demo-api/DemoApi.csproj" />
+  <Project Path="demopage/Demopage.csproj" />
+</Solution>

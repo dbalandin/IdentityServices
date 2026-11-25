@@ -11,7 +11,7 @@
 | `deploy` | запуск сервиса: `docker-compose.yml` (Keycloak 26.x + внешний PostgreSQL), `init-realm.sh` → идемпотентный bootstrap realm `rulink` (`init/realm-bootstrap.sh`), `verify.sh` (ручная сверка JWT) |
 | `docs` | `PRD.md`, `Plan.md` (фаза 1), `tasks/` (task-00…09), `CHANGELOG.md`, `contracts/jwt-claims.md` (эталон JWT), `integrations/` (инструкции P2/P3 потребителям) |
 | `src/portal` | портал администратора — ASP.NET Core **.NET 10** поверх Keycloak Admin REST API (клиент `portal`, org-изоляция в логике портала, task-07) |
-| `examples/demo-api` | демо resource-server .NET 10 (контракт JWT, роли, группы; P2/P3) + `examples/demopage` — демо-сайт (OIDC-логин) |
+| `examples/demo-api` | демо resource-server .NET 10 (контракт JWT, роли, группы; P2/P3) + `examples/demopage` — демо-сайт (OIDC-логин); аутентификация обоих — библиотека `IdentityService` (ProjectReference на каталог `../IdentityService`, вне репозитория) |
 | `tests/Identity.IntegrationTests` | интеграционные тесты живого окружения: контракт JWT, орг-изоляция портала, безопасность (task-08) |
 
 Все секреты и переменные docker должны храниться только в переменных окружения (`.env`)
@@ -36,7 +36,8 @@ cd deploy && cp .envexample ../.env  # заполнить один раз
 docker compose --env-file ../.env up -d && ./init-realm.sh
 
 # тесты без живого окружения (моки):
-dotnet test examples/demo-api/tests/DemoApi.Tests   # 28 (контракт JWT/эндпоинты, мок-authority)
+dotnet test examples/demo-api/tests/DemoApi.Tests   # 21 (контракт JWT/эндпоинты, мок-authority)
+dotnet test examples/demopage/tests/Demopage.Tests  # 15 (OIDC-логин/выход, мок IdP + мок demo-api)
 dotnet test src/portal/tests/Portal.Tests           # 20 (орг-изоляция портала, мок Admin REST)
 
 # интеграционные тесты живого окружения (сами skip, если не поднято; tests/README.md):

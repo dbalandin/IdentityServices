@@ -1,6 +1,6 @@
 using System.Net.Http.Headers;
 using System.Text.Json;
-using DemoApi;
+using IdentityService;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc.RazorPages;
@@ -8,6 +8,8 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 namespace Demopage.Pages;
 
 /// <summary>Защищённая страница: клеймы из OIDC-сессии + вызов demo-api c access token.</summary>
+/// <remarks>Аутентификация — библиотека IdentityService ([Authorize] без сессии → редирект на логин Keycloak);
+/// клеймы читаются её хелперами (Organization/Groups/RealmRoles/Services).</remarks>
 [Authorize]
 public class PrivateModel(IHttpClientFactory httpClientFactory, ILogger<PrivateModel> logger) : PageModel
 {

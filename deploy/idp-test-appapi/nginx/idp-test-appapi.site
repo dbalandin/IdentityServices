@@ -1,0 +1,26 @@
+server {
+        listen 443 ssl;
+        server_name idp-test2.rulink.io;
+
+        include snippets/ssl.conf;
+        include snippets/https.common.conf;
+        include /etc/nginx/mime.types;
+
+        default_type application/json;
+        root /opt/services/idp-test-appapi/;
+
+        location / {
+                proxy_pass http://localhost:11002;
+                include snippets/httpsite.conf;
+                include snippets/headers.conf;
+
+                proxy_read_timeout 3600s;
+                proxy_send_timeout 3600s;
+        }
+}
+
+server {
+        listen 80;
+        server_name idp-test2.rulink.io;
+        return 301 https://$server_name$request_uri;
+}

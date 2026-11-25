@@ -5,7 +5,8 @@
 - **Keycloak 26.x — IdP**: аутентификация, JWT, самообслуживание пароля, организации/группы/роли,
   realm `rulink`; внешний PostgreSQL; кастомного Java-кода нет — только штатные мапперы клеймов.
 - **.NET 10 (ASP.NET Core)** — потребители и админ-портал: `src/portal` (портал администратора поверх
-  Keycloak Admin REST API), `examples/demo-api` + `examples/demopage` (живые образцы интеграции).
+  Keycloak Admin REST API), `examples/demo-api` + `examples/demopage` (живые образцы интеграции
+  через библиотеку `IdentityService` — каталог рядом с репозиторием).
 
 Контракт JWT для потребителей — `docs/contracts/jwt-claims.md` (эталон); инструкции:
 `docs/integrations/dotnet-oauth.md` (P2, `[Authorize]`/роли), `docs/integrations/group-data.md`
@@ -42,7 +43,8 @@ cd examples/demopage  && dotnet run --urls http://127.0.0.1:10040  # OIDC-сай
 
 ```bash
 set -a; . ./.env; set +a
-dotnet test examples/demo-api/tests/DemoApi.Tests       # 28: контракт/эндпоинты demo-api (мок-authority)
+dotnet test examples/demo-api/tests/DemoApi.Tests       # 21: контракт/эндпоинты demo-api (мок-authority)
+dotnet test examples/demopage/tests/Demopage.Tests    # 15: OIDC-логин/выход demopage (мок IdP + мок demo-api)
 dotnet test src/portal/tests/Portal.Tests               # 20: орг-изоляция/валидации портала (мок Admin REST)
 dotnet test tests/Identity.IntegrationTests             # 10: живое окружение (без Keycloak — сами skip)
 ```

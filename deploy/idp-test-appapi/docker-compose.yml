@@ -1,0 +1,33 @@
+# idp-test-appapi — demo-api (examples/demo-api, task-11)
+# Фрагмент общего compose.yaml стенда rulink-compose (srv-05): сервис
+# вложен в секцию services (merge: cat docker-compose.yml >> compose.yaml).
+# URL: https://idp-test2.rulink.io (nginx -> 127.0.0.1:11002)
+# Аутентификация — библиотека IdentityService (режим Jwt из appsettings.json образа).
+  idp-test-appapi:
+    image: "idptestappapi:latest"
+    container_name: idp-test-appapi
+    ports:
+      - "127.0.0.1:11002:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      IDENTITY__AUTHORITY: ${IDPTESTAPPAPI_IDENTITY_AUTHORITY}
+      # режим библиотеки IdentityService: Jwt = 401 без редиректов на всех маршрутах
+      # (тот же ключ в appsettings.json; непустой Audience = строгая проверка aud)
+      IDENTITY__MODE: Jwt
+      IDENTITY__AUDIENCE: demo-api
+      GROUPDATA__ALLOWEDGROUPS: orga-team-a
+    healthcheck:
+      test:
+        - CMD
+        - bash
+        - -c
+        - 'exec 3<>/dev/tcp/127.0.0.1/8080; printf "GET /public HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n" >&3; grep -q "200 OK" <&3'
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+    logging:
+      driver: "journald"
+      options:
+        tag: "idp-test-appapi"

@@ -1,52 +1,26 @@
 using System.Security.Claims;
-using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
-using DemoApi;
+using IdentityService;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // demo-api — .NET 10 minimal api, демонстрация паттерней P2/P3 (task-04):
-//   • JWT bearer-валидация против realm rulink (Authority + JWKS, контракт §7)
-//   • роли realm_access.roles → [Authorize(Roles = …)] (RealmRolesTransformer)
+//   • JWT bearer-валидация против realm rulink (режим Jwt библиотеки IdentityService, контракт §7)
+//   • роли realm_access.roles → [Authorize(Roles = …)] (RealmRolesTransformer библиотеки)
 //   • групповой ресурс по клейму groups (task-06)
-// Конфигурация: appsettings.json + env (IDENTITY__AUTHORITY, IDENTITY__AUDIENCE,
-// GROUPDATA__ALLOWEDGROUPS). Секретов нет — это resource-server, только валидация.
+// Собственной реализации аутентификации здесь нет: схемы, трансформация ролей и хелперы клеймов
+// (Organization / Groups / RealmRoles / Services) — из библиотеки IdentityService.
+// Конфигурация: секция Identity в appsettings.json + env (IDENTITY__AUTHORITY, IDENTITY__MODE,
+// IDENTITY__AUDIENCE), GROUPDATA__ALLOWEDGROUPS. Секретов нет — это resource-server, только валидация.
 // ─────────────────────────────────────────────────────────────────────────────
 
 var builder = WebApplication.CreateBuilder(args);
 
-var identity = builder.Configuration.GetSection("Identity");
-var authority = identity["Authority"]
-    ?? throw new InvalidOperationException("Identity:Authority не задан (appsettings/env IDENTITY__AUTHORITY)");
-var audience = identity["Audience"] ?? "demo-api";
-
-builder.Services
-    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer(o =>
-    {
-        o.Authority = authority;
-        o.Audience = audience;
-        // http-authority только в dev (KC на 127.0.0.1 без TLS); для https-issuer требуем https metadata
-        var requireHttps = bool.TryParse(identity["RequireHttpsMetadata"], out var v) ? v
-            : Uri.TryCreate(authority, UriKind.Absolute, out var u) && u.Scheme != "https" ? false : true;
-        o.RequireHttpsMetadata = requireHttps;
-        // оригинальные имена клеймов (organization, groups, services, realm_access) — без маппинга в ClaimTypes.*
-        o.MapInboundClaims = false;
-        o.TokenValidationParameters = new()
-        {
-            NameClaimType = "preferred_username",       // User.Identity.Name = email (username = email)
-            ValidateAudience = bool.TryParse(identity["ValidateAudience"], out var va) ? va : true,
-            ValidAudience = audience,
-            // для realm Keycloak issuer всегда равен Authority (контракт: iss = …/realms/rulink);
-            // явный ValidIssuer не зависит от discovery и не мешает проверке по метаданным
-            ValidIssuer = authority,
-        };
-    });
+// Mode = Jwt (appsettings.json): JWT Bearer на всех маршрутах — без токена 401, без редиректов;
+// cookie/OIDC не регистрируются. Audience = demo-api — строгая проверка aud (контракт §3).
+// Ошибки конфигурации (нет Authority и т.п.) падают здесь, при старте.
+builder.Services.AddRulinkIdentityService(builder.Configuration);
 
 builder.Services.AddAuthorization();
-
-// realm_access.roles → ClaimTypes.Role: работает [Authorize(Roles = "…")] (контракт §7)
-builder.Services.AddSingleton<IClaimsTransformation, RealmRolesTransformer>();
 
 var app = builder.Build();
 
@@ -60,13 +34,13 @@ var allowedGroups = (builder.Configuration["GroupData:AllowedGroups"] ?? "orga-t
 
 // ── endpoints ────────────────────────────────────────────────────────────────
 
-// анонимный: health/echo
-app.MapGet("/public", () => Results.Ok(new
+// анонимный: health/echo (IdentityConfiguration — singleton, зарегистрированный библиотекой)
+app.MapGet("/public", (IdentityConfiguration identity) => Results.Ok(new
 {
     status = "ok",
     service = "demo-api",
     timeUtc = DateTimeOffset.UtcNow,
-    identityAuthority = authority,
+    identityAuthority = identity.Authority,
 }))
 .WithSummary("Анонимный health/echo");
 

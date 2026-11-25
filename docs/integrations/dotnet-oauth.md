@@ -5,10 +5,15 @@
 - **Статус:** проверена на `examples/demo-api` (task-05)
 - **Аудитория:** команды-потребители IdentityService (.NET 10 / ASP.NET Core сервисы экосистемы)
 - **Эталон клеймов:** `docs/contracts/jwt-claims.md` — интеграция пишется против контракта, а не конкретной инсталляции Keycloak
+- **Примечание (2026-11-26):** демо-проекты переведены на библиотеку `IdentityService` (`AddRulinkIdentityService`).
+  `examples/demo-api` больше не содержит настройки JwtBearer, `RealmRolesTransformer` и `KeycloakClaims.cs` —
+  всё это делает библиотека (её README — `IdentityService/README.md` рядом с репозиторием). Листинг §3 и
+  ссылки на файлы demo-api ниже — ручной вариант подключения, т.е. то, что библиотека делает «под капотом»;
+  для нового сервиса предпочтительна библиотека (режим `Jwt`)
 
 Результат инструкции: сервис с JWT bearer-валидацией против realm `rulink`, в котором работают
 `[Authorize]`, `[Authorize(Roles = "…")]` и чтение клеймов контракта (`organization`, `groups`, `services`; v1.1).
-Живой образец каждого фрагмента кода — `examples/demo-api` (task-04).
+Живой образец каждого фрагмента кода — `examples/demo-api` (task-04; теперь — через библиотеку, см. примечание выше).
 
 ---
 

@@ -1,9 +1,10 @@
 # Контракт JWT — realm `rulink`
 
-- **Версия контракта:** 1.1
-- **Дата:** 2026-11-16 (1.0 — 2026-10-26)
+- **Версия контракта:** 1.2
+- **Дата:** 2026-11-25 (1.0 — 2026-10-26, 1.1 — 2026-11-16)
 - **Статус:** эталон (reference). Живой токен сверяется с этим файлом: вручную в task-02, автотестом в task-08.
 - **Изменения 1.1:** сервисы переехали из клейма `scope` в отдельный строковый клейм `services` — в Keycloak 26 штатная генерация scope-строки затирает протокольный маппер с `claim.name=scope` (найдено при живой сверке на 26.7.5, srv-05); `scope` теперь содержит только стандартные OIDC-значения. Потребители: читать `services` (хелпер `KeycloakClaims.Services()`).
+- **Изменения 1.2:** для OIDC-клиентов (браузерный логин) клеймы `realm_access`, `organization` и `services` добавлены в **ID-токен** (bootstrap realm: `id.token.claim=true` у мапперов `realm roles`, `services`, `organization`) — см. §5.1. Access-токен не изменился.
 - **Источник:** план §4 «Контракт JWT», §5.3; PRD FR 2.
 - **Аудитория:** потребители экосистемы (.NET 10 / ASP.NET Core сервисы). Интеграции пишутся против этого контракта, а не против конкретной инсталляции Keycloak.
 
@@ -143,6 +144,21 @@
 - access token не кэшировать дольше `exp`; обновление — refresh token (или повторный OIDC-логин);
 - refresh token одноразового использования KC не требует (Revoke Refresh Token = OFF, дефолт);
 - часовые метки — unix time; допустимый перекос часов — до 60 с (JwtBearer .NET по умолчанию допускает 5 минут — этого достаточно).
+
+### 5.1. Состав ID-токена (OIDC-клиенты)
+
+Клиенты с браузерным логином (authorization code + PKCE: демо-сайт, UI-сервисы на библиотеке `IdentityService`) строят `ClaimsPrincipal` из **ID-токена**. По умолчанию Keycloak кладёт `realm_access.roles`, `organization` и `services` только в access-токен, поэтому bootstrap realm включает `id.token.claim=true` у соответствующих мапперов. Ожидаемый состав ID-токена (v1.2):
+
+| Клейм | Значение |
+|---|---|
+| `iss`, `aud` (= `client_id`), `azp`, `sub`, `exp`, `iat`, `session_state`, `sid` | стандартные OIDC |
+| `preferred_username`, `email`, `email_verified`, `name` | scopes `profile`, `email` |
+| `groups` | массив имён групп (как в access-токене) |
+| `realm_access` | объект `{ "roles": [ … ] }` — те же роли, что в access-токене |
+| `organization` | строка-alias (как в access-токене) |
+| `services` | строка сервисов через пробел (как в access-токене) |
+
+Роли из ID-токена попадают в `ClaimTypes.Role` той же трансформацией `RealmRolesTransformer`, что и для access-токена.
 
 ## 6. Сервис-сервис: client_credentials
 

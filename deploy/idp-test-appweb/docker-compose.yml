@@ -1,0 +1,38 @@
+# idp-test-appweb — demopage (examples/demopage, task-11)
+# Фрагмент общего compose.yaml стенда rulink-compose (srv-05): сервис
+# вложен в секцию services (merge: cat docker-compose.yml >> compose.yaml).
+# URL: https://idp-test.rulink.io (nginx -> 127.0.0.1:11001)
+# Аутентификация — библиотека IdentityService (режим Cookie из appsettings.json образа).
+  idp-test-appweb:
+    image: "idptestappweb:latest"
+    container_name: idp-test-appweb
+    ports:
+      - "127.0.0.1:11001:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      # за nginx (idp-test.rulink.io): доверять X-Forwarded-Proto/For
+      # -> redirect_uri формируется как https://idp-test.rulink.io/signin-oidc
+      ASPNETCORE_FORWARDEDHEADERS_ENABLED: "true"
+      IDENTITY__AUTHORITY: ${IDPTESTAPPWEB_IDENTITY_AUTHORITY}
+      IDENTITY__CLIENTID: ${IDPTESTAPPWEB_IDENTITY_CLIENTID}
+      IDENTITY__REQUIREHTTPSMETADATA: "true"
+      # режим библиотеки IdentityService: Cookie = только UI (OIDC-логин), JWT не принимается;
+      # выход — POST /Account/Logout (эндпоинт библиотеки), после Keycloak возвращает на «/»
+      IDENTITY__MODE: Cookie
+      # demo-api — соседний контейнер compose-проекта (внутренний порт 8080)
+      IDENTITY__DEMOAPI: http://idp-test-appapi:8080
+    healthcheck:
+      test:
+        - CMD
+        - bash
+        - -c
+        - 'exec 3<>/dev/tcp/127.0.0.1/8080; printf "GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n" >&3; grep -q "200 OK" <&3'
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+    logging:
+      driver: "journald"
+      options:
+        tag: "idp-test-appweb"
