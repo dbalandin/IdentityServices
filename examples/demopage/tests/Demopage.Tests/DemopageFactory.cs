@@ -1,5 +1,7 @@
+using System.Net;
 using System.Security.Claims;
 using System.Text.Json;
+using System.Web;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
@@ -47,6 +49,8 @@ public class DemopageFactory : WebApplicationFactory<Program>
                     MockOidcAuthority.AuthorityUrl + "/.well-known/openid-configuration",
                     new OpenIdConnectConfigurationRetriever(),
                     new HttpDocumentRetriever(new HttpClient(Authority)) { RequireHttps = false });
+                // code flow: обмен кода на токены идёт через backchannel — ведём его в мок (token endpoint)
+                o.Backchannel = new HttpClient(Authority);
             });
 
             // та же именованная регистрация, что в Program.cs — заменяем только транспорт
@@ -83,6 +87,39 @@ public class DemopageFactory : WebApplicationFactory<Program>
     /// </summary>
     public HttpClient CreateClientNoRedirect()
         => CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false, HandleCookies = false });
+
+    /// <summary>
+    /// Настоящий OIDC-логин (authorization code + PKCE) через мок-Keycloak — без браузера:
+    /// GET <paramref name="path"/> без сессии → 302 на авторизацию (state, nonce, correlation- и nonce-cookie)
+    /// → колбэк <c>/signin-oidc?code&amp;state</c> с этими cookie → token endpoint мока (пара токенов —
+    /// <paramref name="tokens"/>, nonce из запроса авторизации) → cookie-сессия.
+    /// Так сайт работает с реальным Keycloak: principal строит OIDC-обработчик библиотеки.
+    /// </summary>
+    /// <returns>Заголовок Cookie сессии, как его прислал бы браузер.</returns>
+    public async Task<string> SignInWithAuthorizationCodeAsync(
+        Func<string, (string IdToken, string AccessToken)> tokens, string path = "/Private")
+    {
+        using var client = CreateClientNoRedirect();
+        using var challenge = await client.GetAsync(path);
+        Assert.Equal(HttpStatusCode.Redirect, challenge.StatusCode);
+        var location = challenge.Headers.Location!;
+        Assert.StartsWith(MockOidcAuthority.AuthorizationEndpoint, location.ToString());
+        var query = HttpUtility.ParseQueryString(location.Query);
+        var challengeCookies = CookieHeader(challenge);
+
+        Authority.CodeGrant = _ => tokens(query["nonce"]!);
+
+        using var callback = await client.SendAsync(WithCookie(
+            new HttpRequestMessage(HttpMethod.Get, $"/signin-oidc?code=test-auth-code&state={Uri.EscapeDataString(query["state"]!)}"),
+            challengeCookies));
+        Assert.Equal(HttpStatusCode.Redirect, callback.StatusCode); // сессия создана, возврат на исходную страницу
+        Assert.Equal(path, callback.Headers.Location!.ToString());
+
+        return CookieHeader(callback);
+    }
+
+    private static string CookieHeader(HttpResponseMessage response)
+        => string.Join("; ", response.Headers.GetValues("Set-Cookie").Select(c => c.Split(';')[0]));
 
     /// <summary>
     /// Фабрика с окружением Production — как на стенде (deploy/idp-test-appweb): в demopage включён

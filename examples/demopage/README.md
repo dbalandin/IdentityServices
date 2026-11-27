@@ -61,8 +61,10 @@ Production: `ASPNETCORE_ENVIRONMENT=Production dotnet run --no-launch-profile`
 1. **Клиент Keycloak `demo-api`** (создаётся `deploy/keycloak-rulink/init/realm-bootstrap.sh`):
    - `publicClient=true`, `standardFlowEnabled=true` (authorization code flow);
    - **redirect URI сайта** `<site>/signin-oidc` должен входить в `redirectUris` клиента:
-     dev `http://127.0.0.1:10040/signin-oidc` покрыт wildcard `http://127.0.0.1:*/*`;
-     для прод-URL добавить в `.env`: `DEMO_API_REDIRECT_URIS=http://127.0.0.1:*/*,http://localhost:*/*,https://<site>/*`
+     dev `http://127.0.0.1:10040/signin-oidc` входит в дефолт `http://127.0.0.1/*,http://localhost/*`
+     (в шаблоне нет порта: Keycloak сверяет scheme, host и путь; шаблон с wildcard-портом `http://127.0.0.1:*/*`
+     в Keycloak 26 не совпадает ни с одним URI — `Invalid parameter: redirect_uri`);
+     для прод-URL добавить в `.env`: `DEMO_API_REDIRECT_URIS=http://127.0.0.1/*,http://localhost/*,https://<site>/*`
      (композиция передаёт в контейнер, bootstrap идемпотентно обновит клиента)
      и перезапустить init-realm.sh;
    - **post logout redirect URI**: после выхода библиотека возвращает на `/` — URL сайта
@@ -72,9 +74,12 @@ Production: `ASPNETCORE_ENVIRONMENT=Production dotnet run --no-launch-profile`
    - аудитория: audience mapper `demo-api` → access token `aud=[account, demo-api]`
      (именно поэтому токен сайта проходит проверку `Audience` в demo-api без доп. настроек).
 2. **Scopes**: `openid profile email`; группы/организация/services/realm-роли — дефолтные
-   client scope realm'а (task-02), отдельно запрашивать не нужно. Важно: клеймы строятся из
-   **ID-токена** (контракт §5.1, v1.2): bootstrap realm включает `id.token.claim=true` у мапперов
-   `realm roles`, `organization`, `services` — иначе на странице не будет организации/групп/ролей.
+   client scope realm'а (task-02), отдельно запрашивать не нужно. Клеймы сессии: обработчик OIDC строит
+   principal из **ID-токена**, а недостающие клеймы контракта (`organization`, `services`, `realm_access`…)
+   библиотека довносит из access-токена (контракт §5.1) — таблица на `/Private` полная на любом realm.
+   Bootstrap realm дополнительно включает `id.token.claim=true` у мапперов `realm roles`, `organization`,
+   `services` (клеймы есть и в самом ID-токене); после изменения мапперов нужно перелогиниться — состав
+   клеймов фиксируется в cookie при входе.
 3. **Приложение** — `AddRulinkIdentityService` в Program.cs: authorization code + PKCE,
    `SaveTokens=true`, `MapInboundClaims=false`, `NameClaimType=preferred_username` — настройки
    библиотеки.
@@ -94,12 +99,12 @@ curl -s -o /dev/null -w "%{redirect_url}\n" -X POST http://127.0.0.1:10040/Accou
 
 ## Тесты (без Keycloak и demo-api)
 
-`tests/Demopage.Tests` — TestServer с приложением как есть и моками: discovery/JWKS — `MockOidcAuthority`
-(backchannel обработчика OIDC), `/me` — `MockDemoApi`; cookie-сессия тестового пользователя создаётся
-тестовым входом `/test/signin` (IStartupFilter, код demopage не меняет).
+`tests/Demopage.Tests` — TestServer с приложением как есть и моками: discovery, JWKS и token endpoint —
+`MockOidcAuthority` (backchannel обработчика OIDC; подписывает RS256-токены), `/me` — `MockDemoApi`;
+cookie-сессия тестового пользователя создаётся тестовым входом `/test/signin` (IStartupFilter, код demopage не меняет).
 
 ```bash
-dotnet test examples/demopage/tests/Demopage.Tests   # 15 тестов
+dotnet test examples/demopage/tests/Demopage.Tests   # 19 тестов
 ```
 
 Проверяют: `/Index` анонимно; `/Private` без сессии → 302 на Keycloak (`client_id=demo-api`,
@@ -107,6 +112,12 @@ dotnet test examples/demopage/tests/Demopage.Tests   # 15 тестов
 и вызов demo-api с `access_token` из сессии (без токена — сообщение об этом); `/Account/Logout` →
 302 на `end_session_endpoint` + удаление cookie, GET и POST; форма выхода в layout; старая страница
 `/Logout` удалена. Те же проверки выхода/логина — в окружении Production (как на стенде).
+
+`OidcCallbackTests` — настоящий OIDC-вход без браузера: challenge → колбэк `/signin-oidc` → обмен кода
+в token endpoint мока (PKCE, `client_id=demo-api`, без секрета). ID-токен мока — как у Keycloak без
+`id.token.claim` у мапперов (профиль + `groups`), access-токен — весь контракт: `/Private` показывает
+и `organization`, и роли, и services (довнесены из access-токена), demo-api вызывается с полученным
+access-токеном; то же — в окружении Production.
 
 ## Образ (task-11)
 

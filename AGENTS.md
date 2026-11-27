@@ -37,7 +37,7 @@ docker compose --env-file ../.env up -d && ./init-realm.sh
 
 # тесты без живого окружения (моки):
 dotnet test examples/demo-api/tests/DemoApi.Tests   # 21 (контракт JWT/эндпоинты, мок-authority)
-dotnet test examples/demopage/tests/Demopage.Tests  # 15 (OIDC-логин/выход, мок IdP + мок demo-api)
+dotnet test examples/demopage/tests/Demopage.Tests  # 19 (OIDC-логин/выход + настоящий code flow через мок IdP, мок demo-api)
 dotnet test src/portal/tests/Portal.Tests           # 20 (орг-изоляция портала, мок Admin REST)
 
 # интеграционные тесты живого окружения (сами skip, если не поднято; tests/README.md):

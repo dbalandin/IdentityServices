@@ -77,14 +77,20 @@ else
   kc create realms -s "realm=$REALM" -s enabled=true -s organizationsEnabled=true -s "displayName=RuLink"
 fi
 
-# SMTP (realm-level)
-SMTP_JSON='{"host":"'"$(json_escape "${SMTP_HOST:-}")"'","port":"'"${SMTP_PORT:-587}"'","from":"'"$(json_escape "${SMTP_FROM:-}")"'"'
-if [ -n "${SMTP_USER:-}" ]; then
-  SMTP_JSON+=',"auth":"true","user":"'"$(json_escape "$SMTP_USER")"'","password":"'"$(json_escape "${SMTP_PASSWORD:-}")"'"'
-else
-  SMTP_JSON+=',"auth":"false"'
+# SMTP (realm-level) — необязателен: без SMTP_HOST настройка smtpServer не задаётся
+# (kc отклоняет пустой from: "Invalid sender address" — скрипт падал на свежем realm),
+# forgot password работать не будет
+SMTP_ARGS=()
+if [ -n "${SMTP_HOST:-}" ]; then
+  SMTP_JSON='{"host":"'"$(json_escape "$SMTP_HOST")"'","port":"'"${SMTP_PORT:-587}"'","from":"'"$(json_escape "${SMTP_FROM:-}")"'"'
+  if [ -n "${SMTP_USER:-}" ]; then
+    SMTP_JSON+=',"auth":"true","user":"'"$(json_escape "$SMTP_USER")"'","password":"'"$(json_escape "${SMTP_PASSWORD:-}")"'"'
+  else
+    SMTP_JSON+=',"auth":"false"'
+  fi
+  SMTP_JSON+=',"starttls":"'"${SMTP_STARTTLS:-false}"'"}'
+  SMTP_ARGS=(-s "smtpServer=$SMTP_JSON")
 fi
-SMTP_JSON+=',"starttls":"'"${SMTP_STARTTLS:-false}"'"}'
 
 # brute force: блокировка после 5 неудач, нарастающее ожидание (план §6);
 # password policy: минимум 8 символов; email as username; forgot password ON.
@@ -103,8 +109,8 @@ kc update "realms/$REALM" \
   -s permanentLockout=false \
   -s 'passwordPolicy=length(8)' \
   -s resetPasswordAllowed=true \
-  -s "smtpServer=$SMTP_JSON"
-log "настройки realm применены (email-as-username, brute force 5/нарастающее ожидание, policy 8+, SMTP, forgot password)"
+  ${SMTP_ARGS[@]+"${SMTP_ARGS[@]}"}
+log "настройки realm применены (email-as-username, brute force 5/нарастающее ожидание, policy 8+,${SMTP_HOST:+ SMTP,} forgot password)"
 
 # Keycloak 26: атрибуты пользователей проходят валидацию user profile;
 # незадекларированный атрибут services при записи молча отбрасывается.
@@ -236,10 +242,13 @@ get_client_id() { kc get clients -r "$REALM" -q "clientId=$1" --fields id --form
 PORTAL_REDIRECT_JSON='["'"$(json_escape "${PORTAL_REDIRECT_URIS:-http://127.0.0.1:10030/*}")"'"]'
 PORTAL_ORIGINS_JSON='["'"$(json_escape "${PORTAL_WEB_ORIGINS:-http://127.0.0.1:10030}")"'"]'
 
-# redirect URIs клиента demo-api: через запятую; dev-дефолт — wildcard localhost/127.0.0.1
-# (задание 2 task-04: сайт examples/demopage — http://127.0.0.1:10040/signin-oidc входит в wildcard;
-# для прод-публикации добавить https-URL сайта: DEMO_API_REDIRECT_URIS="http://127.0.0.1:*/*,http://localhost:*/*,https://demo.rulink.io/*")
-DEMO_REDIRECT_JSON='['"$(printf '%s' "${DEMO_API_REDIRECT_URIS:-http://127.0.0.1:*/*,http://localhost:*/*}" | tr ',' '\n' | sed 's/^/"/;s/$/"/' | paste -sd, -)"']'
+# redirect URIs клиента demo-api: через запятую; dev-дефолт — локальные хосты на любом порту.
+# В шаблоне НЕТ порта: Keycloak сверяет scheme, host и путь. Шаблон с wildcard-портом вида
+# http://127.0.0.1:*/* в Keycloak 26 не совпадает ни с одним URI ("Invalid parameter: redirect_uri",
+# проверено на 26.7.5) — прежний дефолт не покрывал даже сайт examples/demopage (задание 2 task-04):
+# его http://127.0.0.1:10040/signin-oidc входит в http://127.0.0.1/*. Для прод-публикации добавить
+# https-URL сайта: DEMO_API_REDIRECT_URIS="http://127.0.0.1/*,http://localhost/*,https://demo.rulink.io/*"
+DEMO_REDIRECT_JSON='['"$(printf '%s' "${DEMO_API_REDIRECT_URIS:-http://127.0.0.1/*,http://localhost/*}" | tr ',' '\n' | sed 's/^/"/;s/$/"/' | paste -sd, -)"']'
 DEMO_ORIGINS_JSON='['"$(printf '%s' "${DEMO_API_WEB_ORIGINS:-+}" | tr ',' '\n' | sed 's/^/"/;s/$/"/' | paste -sd, -)"']'
 
 # portal — confidential + сервис-аккаунт (Admin REST для портала, P4)

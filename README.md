@@ -44,7 +44,7 @@ cd examples/demopage  && dotnet run --urls http://127.0.0.1:10040  # OIDC-сай
 ```bash
 set -a; . ./.env; set +a
 dotnet test examples/demo-api/tests/DemoApi.Tests       # 21: контракт/эндпоинты demo-api (мок-authority)
-dotnet test examples/demopage/tests/Demopage.Tests    # 15: OIDC-логин/выход demopage (мок IdP + мок demo-api)
+dotnet test examples/demopage/tests/Demopage.Tests    # 19: OIDC-логин/выход demopage (мок IdP + мок demo-api; в т.ч. настоящий code flow)
 dotnet test src/portal/tests/Portal.Tests               # 20: орг-изоляция/валидации портала (мок Admin REST)
 dotnet test tests/Identity.IntegrationTests             # 10: живое окружение (без Keycloak — сами skip)
 ```
